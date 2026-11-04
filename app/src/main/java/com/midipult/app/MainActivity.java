@@ -307,8 +307,7 @@ public class MainActivity extends Activity {
         String stationLabel = station == null ? ""
                 : (station.name == null || station.name.isEmpty() ? station.ip : station.name);
         String stationUrl = station == null ? "" : station.url;
-        final Ui.Sheet sheet = new Ui.Sheet(this, "MidiPult",
-                "Android-оболочка панели · v" + BuildConfig.VERSION_NAME);
+        final Ui.Sheet sheet = new Ui.Sheet(this, "MidiPult", "Управление станцией");
         sheet.row("Станции и подключение", "Добавить, переименовать или удалить",
                 v -> {
                     sheet.dismiss();

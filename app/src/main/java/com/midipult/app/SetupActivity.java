@@ -59,8 +59,13 @@ public class SetupActivity extends Activity {
         View root = build();
         setContentView(root);
         Ui.applyInsets(this, root, 20);
-        render(StationStore.load(this));
-        if (savedInstanceState == null) scan();
+        List<Station> saved = StationStore.load(this);
+        render(saved);
+        if (saved.isEmpty()) {
+            scan();
+        } else {
+            status.setText("Сохранено станций: " + saved.size() + ". Можно сканировать или добавить по IP.");
+        }
     }
 
     private View build() {
@@ -166,17 +171,33 @@ public class SetupActivity extends Activity {
             }
             List<Station> all = new ArrayList<>(stations);
             Map<String, Station> map = new LinkedHashMap<>();
-            for (Station station : all) map.put(station.url, station);
-            for (Station station : StationStore.load(this)) {
-                Station found = map.get(station.url);
+            for (Station station : all) map.put(stationKey(station), station);
+            for (Station saved : StationStore.load(this)) {
+                String key = stationKey(saved);
+                Station found = map.get(key);
                 if (found == null) {
-                    map.put(station.url, station);
+                    // Миграция старых записей без id и поиск по прежнему URL.
+                    for (Station candidate : map.values()) {
+                        if (candidate.url.equals(saved.url)) {
+                            found = candidate;
+                            break;
+                        }
+                    }
+                }
+                if (found == null) {
+                    map.put(key, saved);
                 } else {
-                    map.put(station.url, new Station(
-                            station.name, station.url, found.ip, found.model, found.version));
+                    // id/имя станции стабильны, поэтому смена IP не создаёт дубль
+                    // и не теряет пользовательское имя.
+                    Station merged = new Station(
+                            saved.name, found.url, found.ip, found.model, found.version,
+                            found.id);
+                    map.remove(key);
+                    map.put(stationKey(merged), merged);
                 }
             }
             all = new ArrayList<>(map.values());
+            StationStore.save(this, all);
             render(all);
             if (all.isEmpty()) {
                 status.setText("Колонки не найдены. Проверьте Wi-Fi или добавьте по IP.");
@@ -188,6 +209,10 @@ public class SetupActivity extends Activity {
                 }
             }
         });
+    }
+
+    private String stationKey(Station station) {
+        return station.id == null || station.id.trim().isEmpty() ? station.url : station.id.trim();
     }
 
     private void render(List<Station> stations) {

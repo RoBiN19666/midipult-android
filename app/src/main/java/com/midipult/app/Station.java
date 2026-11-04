@@ -4,6 +4,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public final class Station {
+    public final String id;
     public final String name;
     public final String url;
     public final String ip;
@@ -11,11 +12,17 @@ public final class Station {
     public final String version;
 
     public Station(String name, String url, String ip, String model, String version) {
+        this(name, url, ip, model, version, "");
+    }
+
+    public Station(String name, String url, String ip, String model, String version, String id) {
         this.name = name == null ? "" : name;
         this.url = url == null ? "" : url;
         this.ip = ip == null ? "" : ip;
         this.model = model == null ? "" : model;
         this.version = version == null ? "" : version;
+        String fallback = this.name.trim().isEmpty() ? this.url : this.name.trim();
+        this.id = id == null || id.trim().isEmpty() ? fallback : id.trim();
     }
 
     public String label() {
@@ -28,6 +35,7 @@ public final class Station {
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
+            object.put("id", id);
             object.put("name", name);
             object.put("url", url);
             object.put("ip", ip);
@@ -56,7 +64,8 @@ public final class Station {
                 url,
                 ip,
                 object.optString("model", ""),
-                object.optString("version", "")
+                object.optString("version", ""),
+                object.optString("id", "")
         );
     }
 }

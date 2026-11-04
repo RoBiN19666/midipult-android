@@ -60,7 +60,7 @@ public final class StationStore {
                 String name = existing.name == null || existing.name.trim().isEmpty()
                         ? station.name : existing.name;
                 stations.set(i, new Station(name, station.url, station.ip,
-                        station.model, station.version));
+                        station.model, station.version, existing.id));
                 found = true;
                 break;
             }
@@ -77,7 +77,7 @@ public final class StationStore {
         for (int i = 0; i < stations.size(); i++) {
             Station item = stations.get(i);
             if (item.url.equals(station.url)) {
-                stations.set(i, new Station(clean, item.url, item.ip, item.model, item.version));
+                stations.set(i, new Station(clean, item.url, item.ip, item.model, item.version, item.id));
                 break;
             }
         }

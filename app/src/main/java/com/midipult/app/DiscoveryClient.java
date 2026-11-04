@@ -122,7 +122,8 @@ public final class DiscoveryClient {
                     "http://" + ip + ":" + port,
                     ip,
                     object.optString("model", ""),
-                    object.optString("version", "")
+                    object.optString("version", ""),
+                    object.optString("id", name)
             );
         } catch (Exception ignored) {
             return null;
