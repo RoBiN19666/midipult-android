@@ -4,6 +4,10 @@
   <img src="docs/img/logo.png" alt="MidiPult — панель Яндекс Станции Миди" width="520">
 </p>
 
+[![Release](https://img.shields.io/github/v/release/RoBiN19666/midipult-android?style=flat-square&label=release)](https://github.com/RoBiN19666/midipult-android/releases)
+[![License](https://img.shields.io/github/license/RoBiN19666/midipult-android?style=flat-square&label=license)](https://github.com/RoBiN19666/midipult-android/blob/main/LICENSE)
+[![Android](https://img.shields.io/badge/Android-5.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/RoBiN19666/midipult-android)
+
 **Пульт для Яндекс Станции Миди — в кармане.**
 
 [Скачать APK](https://github.com/RoBiN19666/midipult-android/releases/latest)
@@ -11,6 +15,12 @@
 Тонкая Android-оболочка вокруг веб-панели **[MidiPult](https://github.com/RoBiN19666/midipult)**. Приложение не содержит
 интерфейс панели: оно находит станцию в локальной сети и открывает её WebView.
 Поэтому изменения панели **не требуют пересборки APK**.
+
+## О создании проекта
+
+Приложение написано в паре с LLM-агентом (**DeepSeek Harness**) — тем же, что
+и сама панель. Постановка задач, тесты на живых устройствах и финальная
+проверка — за автором.
 
 ## Возможности
 
@@ -27,7 +37,15 @@
 
 | Настройка | Панель |
 |---|---|
-| ![Настройка](docs/img/setup.png) | ![Панель](docs/img/main.png) |
+| <img src="docs/img/setup.png" alt="Настройка" width="280"> | <img src="docs/img/main.png" alt="Панель" width="280"> |
+
+## Требования
+
+- **Android 5.0+**;
+- телефон и колонка в одной Wi-Fi / LAN-сети;
+- на колонке установлена и запущена панель **MidiPult** на порту **8055** —
+  без неё приложение покажет пустой WebView;
+- UDP-порт **8056** не заблокирован роутером (иначе — ручной ввод IP).
 
 ## Как подключить
 
@@ -47,41 +65,24 @@ Android запрещена.
 Панель обновляется отдельно, из своего репозитория, и APK при этом не
 пересобирается.
 
-## Сборка
+## Ограничения
 
-Нужны Android SDK, JDK 17 и Gradle 8.11+.
-
-```sh
-gradle assembleDebug
-```
-
-Подписанный release:
-
-```sh
-export ANDROID_KEYSTORE_PATH=release.keystore
-export ANDROID_KEYSTORE_PASSWORD=...
-export ANDROID_KEY_ALIAS=...
-export ANDROID_KEY_PASSWORD=...
-gradle assembleRelease
-```
-
-`release.keystore` не коммитится.
-
-### GitHub Actions
-
-Workflow `.github/workflows/android.yml` собирает APK по тегу `android-v*`.
-Для подписанного релиза нужны secrets:
-
-- `ANDROID_KEYSTORE_BASE64`;
-- `ANDROID_KEYSTORE_PASSWORD`;
-- `ANDROID_KEY_ALIAS`;
-- `ANDROID_KEY_PASSWORD`.
-
-Без секретов тег завершается ошибкой — debug-сборка не публикуется как
-релизный APK.
+- **Только Android** — версий для iOS и десктопа нет и не планируется.
+- **Тихая установка APK невозможна**: Android требует подтверждения пользователя.
+- **WebView зависит от панели**: если колонка недоступна или панель не
+  запущена, экран будет пустым — интерфейса внутри APK нет.
+- **HTTP без TLS**: панель работает по локальной сети на `http://`, HTTPS
+  намеренно не используется (см. README панели).
+- **Нет фоновой работы и push-уведомлений** — приложение активно только когда
+  открыто.
+- **Голосовые команды** выполняются Алисой на колонке, не на телефоне.
 
 ## Ссылки
 
-- [Репозиторий приложения Android](https://github.com/RoBiN19666/midipult-android)
 - [Репозиторий панели](https://github.com/RoBiN19666/midipult)
 - [Все релизы APK](https://github.com/RoBiN19666/midipult-android/releases)
+- [Issues](https://github.com/RoBiN19666/midipult-android/issues) — баги и предложения
+
+## Лицензия
+
+MIT. См. [LICENSE](LICENSE).
