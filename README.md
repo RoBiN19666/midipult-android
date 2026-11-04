@@ -85,4 +85,3 @@ Workflow `.github/workflows/android.yml` собирает APK по тегу `and
 - [Репозиторий приложения Android](https://github.com/RoBiN19666/midipult-android)
 - [Репозиторий панели](https://github.com/RoBiN19666/midipult)
 - [Все релизы APK](https://github.com/RoBiN19666/midipult-android/releases)
-- [Последний APK](https://github.com/RoBiN19666/midipult-android/releases/latest)
