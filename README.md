@@ -6,7 +6,7 @@
 
 [![Release](https://img.shields.io/github/v/release/RoBiN19666/midipult-android?style=flat-square&label=release)](https://github.com/RoBiN19666/midipult-android/releases)
 [![License](https://img.shields.io/github/license/RoBiN19666/midipult-android?style=flat-square&label=license)](https://github.com/RoBiN19666/midipult-android/blob/main/LICENSE)
-[![Android](https://img.shields.io/badge/Android-5.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/RoBiN19666/midipult-android)
+[![Android](https://img.shields.io/badge/Android-6.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/RoBiN19666/midipult-android)
 
 **Пульт для Яндекс Станции Миди — в кармане.**
 
@@ -25,7 +25,7 @@
 ## Возможности
 
 - автоматический поиск станций по UDP (порт `8056`);
-- несколько станций, переключение и переименование;
+- несколько станций, переключение, переименование и удаление;
 - первый запуск сам находит колонку; если она одна — открывает сразу;
 - ручной ввод IP, если discovery блокирует роутер;
 - PIN, cookies и сессия панели;
@@ -41,7 +41,7 @@
 
 ## Требования
 
-- **Android 5.0+**;
+- **Android 6.0 (API 23)**;
 - телефон и колонка в одной Wi-Fi / LAN-сети;
 - на колонке установлена и запущена панель **MidiPult** на порту **8055** —
   без неё приложение покажет пустой WebView;
