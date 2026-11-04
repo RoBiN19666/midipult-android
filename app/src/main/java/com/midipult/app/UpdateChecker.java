@@ -35,19 +35,28 @@ public final class UpdateChecker {
         void onResult(File file, String error);
     }
 
+    public interface ProgressListener {
+        void onProgress(long downloaded, long total);
+    }
+
     public static final class UpdateInfo {
         public final String version;
         public final String name;
         public final String body;
         public final String apkUrl;
         public final String shaUrl;
+        public final long size;
+        public final String digest;
 
-        UpdateInfo(String version, String name, String body, String apkUrl, String shaUrl) {
+        UpdateInfo(String version, String name, String body, String apkUrl, String shaUrl,
+                   long size, String digest) {
             this.version = version;
             this.name = name;
             this.body = body;
             this.apkUrl = apkUrl;
             this.shaUrl = shaUrl;
+            this.size = size;
+            this.digest = digest;
         }
     }
 
@@ -95,7 +104,9 @@ public final class UpdateChecker {
                             release.optString("name", tag),
                             release.optString("body", ""),
                             asset.optString("browser_download_url", ""),
-                            sha == null ? "" : sha.optString("browser_download_url", "")
+                            sha == null ? "" : sha.optString("browser_download_url", ""),
+                            asset.optLong("size", 0L),
+                            digestOf(asset.optString("digest", ""))
                     );
                     break;
                 }
@@ -109,7 +120,8 @@ public final class UpdateChecker {
         });
     }
 
-    public static void downloadAndInstall(Context context, UpdateInfo info, DownloadCallback callback) {
+    public static void downloadAndInstall(Context context, UpdateInfo info,
+                                          ProgressListener progress, DownloadCallback callback) {
         final Context app = context.getApplicationContext();
         IO.execute(() -> {
             File target = null;
@@ -122,7 +134,7 @@ public final class UpdateChecker {
                 if (dir == null) dir = app.getCacheDir();
                 if (!dir.exists() && !dir.mkdirs()) throw new RuntimeException("Не могу создать папку загрузки");
                 target = new File(dir, "midipult-android-" + info.version + ".apk");
-                download(info.apkUrl, target);
+                download(info.apkUrl, target, progress);
                 if (info.shaUrl != null && !info.shaUrl.trim().isEmpty()) {
                     String expected = downloadText(info.shaUrl);
                     if (!sha256(target).equalsIgnoreCase(expected)) {
@@ -207,7 +219,7 @@ public final class UpdateChecker {
         }
     }
 
-    private static void download(String url, File target) throws Exception {
+    private static void download(String url, File target, ProgressListener progress) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(60000);
@@ -215,14 +227,35 @@ public final class UpdateChecker {
         connection.setRequestProperty("User-Agent", "MidiPult-Android/" + BuildConfig.VERSION_NAME);
         int code = connection.getResponseCode();
         if (code != 200) throw new RuntimeException("HTTP " + code);
+        long total = connection.getContentLength();
+        long done = 0;
+        long reported = 0;
         try (InputStream input = connection.getInputStream();
              FileOutputStream output = new FileOutputStream(target)) {
             byte[] buffer = new byte[64 * 1024];
             int count;
-            while ((count = input.read(buffer)) > 0) output.write(buffer, 0, count);
+            while ((count = input.read(buffer)) > 0) {
+                output.write(buffer, 0, count);
+                done += count;
+                if (progress != null && (done - reported >= 32 * 1024 || (total > 0 && done >= total))) {
+                    reported = done;
+                    postProgress(progress, done, total);
+                }
+            }
         } finally {
             connection.disconnect();
         }
+        if (progress != null) postProgress(progress, done, total);
+    }
+
+    private static void postProgress(final ProgressListener progress, final long done, final long total) {
+        MAIN.post(() -> progress.onProgress(done, total));
+    }
+
+    private static String digestOf(String digest) {
+        String value = digest == null ? "" : digest.trim();
+        if (value.startsWith("sha256:")) value = value.substring("sha256:".length());
+        return value.toLowerCase(Locale.US);
     }
 
     private static String downloadText(String url) throws Exception {

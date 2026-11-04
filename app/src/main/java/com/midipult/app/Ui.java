@@ -243,6 +243,14 @@ final class Ui {
         private final LinearLayout buttons;
 
         Sheet(Context context, String title, String subtitle) {
+            this(context, title, subtitle, 0);
+        }
+
+        /**
+         * @param bottomOffsetPx сдвиг карточки вверх, чтобы она не перекрывала
+         *                       нижнюю навигацию приложения
+         */
+        Sheet(Context context, String title, String subtitle, int bottomOffsetPx) {
             this.context = context;
             dialog = new Dialog(context);
             dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -274,7 +282,7 @@ final class Ui {
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             int margin = dp(context, 10);
-            params.setMargins(margin, margin, margin, margin);
+            params.setMargins(margin, margin, margin, margin + Math.max(0, bottomOffsetPx));
             wrapper.addView(card, params);
             dialog.setContentView(wrapper);
 
