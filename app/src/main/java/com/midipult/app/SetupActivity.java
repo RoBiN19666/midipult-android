@@ -1,11 +1,9 @@
 package com.midipult.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,7 +14,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -33,30 +31,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Первый экран: поиск колонок, ручной IP и список сохранённых станций. */
+/** Экран станций: поиск, добавление по IP, переименование и удаление. */
 public class SetupActivity extends Activity {
     public static final String EXTRA_MANAGE = "manage";
-
-    private static final int BG = 0xFF0B0E18;
-    private static final int TEXT = 0xFFEDF1FA;
-    private static final int MUTED = 0xFF8B95AD;
-    private static final int CARD = 0xFF151A2A;
-    private static final int ACCENT = 0xFF7C5CFF;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private LinearLayout list;
     private TextView status;
-    private ProgressBar progress;
+    private ProgressBar scanSpinner;
     private Button scanButton;
     private boolean scanning;
     private boolean manage;
+    private final List<Station> shown = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Window window = getWindow();
-        window.setStatusBarColor(BG);
-        window.setNavigationBarColor(BG);
+        window.setStatusBarColor(Ui.BG);
+        window.setNavigationBarColor(Ui.BG);
         manage = getIntent().getBooleanExtra(EXTRA_MANAGE, false);
         Station active = StationStore.active(this);
         if (!manage && active != null) {
@@ -74,42 +67,58 @@ public class SetupActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
 
-        LinearLayout brand = new LinearLayout(this);
-        brand.setOrientation(LinearLayout.HORIZONTAL);
-        brand.setGravity(Gravity.CENTER_VERTICAL);
-        brand.addView(Ui.logo(this, 56), new LinearLayout.LayoutParams(
-                Ui.dp(this, 56), Ui.dp(this, 56)));
-
-        LinearLayout brandText = new LinearLayout(this);
-        brandText.setOrientation(LinearLayout.VERTICAL);
-        brandText.setPadding(Ui.dp(this, 14), 0, 0, 0);
-        TextView title = Ui.title(this, "MidiPult", 28);
-        brandText.addView(title);
-        brandText.addView(Ui.muted(this, "Пульт для Яндекс Станции Миди", 13));
-        brand.addView(brandText, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        root.addView(brand);
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout headerText = new LinearLayout(this);
+        headerText.setOrientation(LinearLayout.VERTICAL);
+        headerText.addView(Ui.title(this, "MidiPult", 26));
+        TextView subtitle = Ui.muted(this, "Станции и подключение", 13);
+        subtitle.setPadding(0, Ui.dp(this, 4), 0, 0);
+        headerText.addView(subtitle);
+        header.addView(headerText, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (manage) {
+            Button done = Ui.ghost(this, "Готово");
+            done.setOnClickListener(v -> finish());
+            LinearLayout.LayoutParams doneParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Ui.dp(this, 42));
+            doneParams.leftMargin = Ui.dp(this, 8);
+            header.addView(done, doneParams);
+        }
+        root.addView(header);
 
         LinearLayout statusCard = Ui.card(this);
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        scanSpinner = new ProgressBar(this);
+        scanSpinner.setIndeterminate(true);
+        scanSpinner.setIndeterminateTintList(ColorStateList.valueOf(Ui.ACCENT));
+        scanSpinner.setVisibility(View.GONE);
+        statusRow.addView(scanSpinner, new LinearLayout.LayoutParams(
+                Ui.dp(this, 20), Ui.dp(this, 20)));
         status = Ui.muted(this, "Ищу колонки в сети…", 13);
-        statusCard.addView(status);
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progress.setIndeterminate(true);
-        progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));
-        progress.setVisibility(View.GONE);
-        statusCard.addView(progress, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 3)));
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        statusParams.leftMargin = Ui.dp(this, 10);
+        statusRow.addView(status, statusParams);
+        statusCard.addView(statusRow);
         root.addView(statusCard, Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 18, this));
 
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+        LinearLayout listArea = new LinearLayout(this);
+        listArea.setOrientation(LinearLayout.VERTICAL);
+        listArea.setBackgroundColor(Color.TRANSPARENT);
+        LinearLayout.LayoutParams areaParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        scrollParams.topMargin = Ui.dp(this, 16);
-        root.addView(scroll, scrollParams);
+        areaParams.topMargin = Ui.dp(this, 16);
+        root.addView(listArea, areaParams);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(list);
+        list.setBackgroundColor(Color.TRANSPARENT);
+        listArea.addView(list, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
@@ -121,7 +130,7 @@ public class SetupActivity extends Activity {
         buttons.addView(scanButton, new LinearLayout.LayoutParams(0,
                 Ui.dp(this, 48), 1f));
 
-        Button manual = Ui.ghost(this, "IP вручную");
+        Button manual = Ui.ghost(this, "Добавить по IP");
         manual.setOnClickListener(v -> manual());
         LinearLayout.LayoutParams manualParams = new LinearLayout.LayoutParams(0,
                 Ui.dp(this, 48), 1f);
@@ -130,7 +139,8 @@ public class SetupActivity extends Activity {
         root.addView(buttons);
 
         TextView hint = Ui.muted(this,
-                "Колонка и телефон должны быть в одной Wi-Fi сети.\nМожно переименовать станцию кнопкой ✎.", 12);
+                "Колонка и телефон должны быть в одной Wi-Fi сети.\n"
+                        + "Станцию можно переименовать кнопкой ✎ или удалить кнопкой ✕.", 12);
         hint.setPadding(0, Ui.dp(this, 12), 0, 0);
         root.addView(hint);
         return root;
@@ -139,14 +149,14 @@ public class SetupActivity extends Activity {
     private void scan() {
         if (scanning) return;
         scanning = true;
-        progress.setVisibility(View.VISIBLE);
+        scanSpinner.setVisibility(View.VISIBLE);
         status.setText("Ищу колонки в сети…");
         scanButton.setEnabled(false);
         scanButton.setText("Сканирую…");
         list.removeAllViews();
         DiscoveryClient.discover(this, (stations, error) -> {
             scanning = false;
-            progress.setVisibility(View.GONE);
+            scanSpinner.setVisibility(View.GONE);
             scanButton.setEnabled(true);
             scanButton.setText("Сканировать");
             if (error != null) {
@@ -169,7 +179,7 @@ public class SetupActivity extends Activity {
             all = new ArrayList<>(map.values());
             render(all);
             if (all.isEmpty()) {
-                status.setText("Колонки не найдены. Проверьте Wi-Fi или введите IP вручную.");
+                status.setText("Колонки не найдены. Проверьте Wi-Fi или добавьте по IP.");
             } else {
                 status.setText("Найдено: " + all.size() + ". Выберите станцию.");
                 if (!manage && all.size() == 1 && !stations.isEmpty()) {
@@ -181,29 +191,20 @@ public class SetupActivity extends Activity {
     }
 
     private void render(List<Station> stations) {
+        List<Station> snapshot = new ArrayList<>(stations);
+        shown.clear();
+        shown.addAll(snapshot);
         list.removeAllViews();
-        if (stations.isEmpty()) {
-            LinearLayout empty = Ui.card(this);
-            empty.setGravity(Gravity.CENTER_HORIZONTAL);
-            ImageView logo = Ui.logo(this, 64);
-            LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(
-                    Ui.dp(this, 64), Ui.dp(this, 64));
-            logoParams.gravity = Gravity.CENTER_HORIZONTAL;
-            empty.addView(logo, logoParams);
-            TextView title = Ui.title(this, "Пока нет станций", 18);
-            title.setGravity(Gravity.CENTER_HORIZONTAL);
-            title.setPadding(0, Ui.dp(this, 12), 0, 0);
-            empty.addView(title);
-            TextView text = Ui.muted(this,
-                    "Нажмите «Сканировать» — приложение найдёт панель в этой Wi-Fi сети.",
+        if (snapshot.isEmpty()) {
+            TextView empty = Ui.muted(this,
+                    "Пока нет станций.\nНажмите «Сканировать» — приложение найдёт панель в этой Wi-Fi сети.",
                     13);
-            text.setGravity(Gravity.CENTER_HORIZONTAL);
-            text.setPadding(0, Ui.dp(this, 6), 0, 0);
-            empty.addView(text);
+            empty.setGravity(Gravity.CENTER_HORIZONTAL);
+            empty.setPadding(0, Ui.dp(this, 20), 0, Ui.dp(this, 20));
             list.addView(empty);
             return;
         }
-        for (Station station : stations) list.addView(row(station));
+        for (Station station : snapshot) list.addView(row(station));
     }
 
     private View row(Station station) {
@@ -244,57 +245,122 @@ public class SetupActivity extends Activity {
                 Ui.dp(this, 46), Ui.dp(this, 44));
         renameParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         actions.addView(rename, renameParams);
+
+        Button delete = Ui.icon(this, "✕");
+        delete.setTextColor(Ui.DANGER);
+        delete.setContentDescription("Удалить станцию");
+        delete.setOnClickListener(v -> delete(station));
+        LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
+                Ui.dp(this, 46), Ui.dp(this, 44));
+        deleteParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
+        actions.addView(delete, deleteParams);
         box.addView(actions);
 
         box.setOnClickListener(v -> open(station));
         return box;
     }
 
-    private void rename(Station station) {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(station.name == null ? "" : station.name);
-        input.setHint("Например, «Кухня»");
-        input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this)
-                .setTitle("Название станции")
-                .setView(input)
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Сохранить", (dialog, which) -> {
-                    StationStore.rename(this, station, input.getText().toString());
-                    render(StationStore.load(this));
-                    Toast.makeText(this, "Название сохранено", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+    private void rename(final Station station) {
+        final Ui.Sheet sheet = new Ui.Sheet(this, "Название станции",
+                "Так станция будет видна в списке и в меню");
+        final EditText input = Ui.field(this, "Например, «Кухня»", station.name);
+        sheet.add(input);
+        sheet.keyboard();
+        sheet.negative("Отмена");
+        sheet.positive("Сохранить", () -> {
+            String name = input.getText().toString();
+            Station renamed = new Station(name, station.url, station.ip,
+                    station.model, station.version);
+            StationStore.upsert(this, renamed);
+            replaceShown(station, renamed);
+            render(shown);
+            Toast.makeText(this, "Название сохранено", Toast.LENGTH_SHORT).show();
+            sheet.dismiss();
+        });
+        sheet.show();
+    }
+
+    private void delete(final Station station) {
+        final String label = station.name == null || station.name.trim().isEmpty()
+                ? station.ip : station.name;
+        Station active = StationStore.active(this);
+        boolean isActive = active != null && active.url.equals(station.url);
+        final Ui.Sheet sheet = new Ui.Sheet(this, "Удалить станцию?", "«" + label + "»");
+        sheet.message(isActive
+                ? "Это активная станция. После удаления приложение вернётся к выбору станции."
+                : "Станция исчезнет из списка.");
+        sheet.negative("Отмена");
+        sheet.danger("Удалить", () -> {
+            StationStore.remove(this, station);
+            removeShown(station);
+            render(shown);
+            Toast.makeText(this, "Станция удалена", Toast.LENGTH_SHORT).show();
+            if (shown.isEmpty()) {
+                status.setText("Станции не найдены. Нажмите «Сканировать» или добавьте по IP.");
+            } else {
+                status.setText("Станций в списке: " + shown.size() + ".");
+            }
+            sheet.dismiss();
+        });
+        sheet.show();
+    }
+
+    private void removeShown(Station station) {
+        for (int i = 0; i < shown.size(); i++) {
+            if (shown.get(i).url.equals(station.url)) {
+                shown.remove(i);
+                break;
+            }
+        }
+    }
+
+    private void replaceShown(Station station, Station replacement) {
+        for (int i = 0; i < shown.size(); i++) {
+            if (shown.get(i).url.equals(station.url)) {
+                shown.set(i, replacement);
+                break;
+            }
+        }
     }
 
     private void open(Station station) {
         StationStore.setActive(this, station);
-        Intent intent = new Intent(this, MainActivity.class);
-        startActivity(intent);
+        if (manage) {
+            // Экран открыт из меню — возвращаемся на панель, MainActivity перезагрузится.
+            finish();
+            return;
+        }
+        startActivity(new Intent(this, MainActivity.class));
         finish();
     }
 
     private void manual() {
-        EditText input = new EditText(this);
+        final Ui.Sheet sheet = new Ui.Sheet(this, "Добавить станцию",
+                "IP колонки и порт панели (обычно 8055)");
+        final EditText input = Ui.field(this, "http://192.168.1.10:8055", "");
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        input.setHint("http://192.168.31.220:8055");
-        input.setText("");
-        input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this)
-                .setTitle("Адрес панели")
-                .setMessage("IP колонки и порт 8055")
-                .setView(input)
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Подключить", (dialog, which) -> probe(normalize(input.getText().toString())))
-                .show();
+        sheet.add(input);
+        sheet.keyboard();
+        sheet.negative("Отмена");
+        sheet.positive("Подключить", () -> {
+            sheet.dismiss();
+            probe(normalize(input.getText().toString()));
+        });
+        sheet.show();
     }
 
-    private void probe(String address) {
-        ProgressDialog dialog = new ProgressDialog(this);
-        dialog.setMessage("Проверяю панель…");
-        dialog.setCancelable(false);
-        dialog.show();
+    private void probe(final String address) {
+        final Ui.Sheet sheet = new Ui.Sheet(this, "Проверяю панель", address);
+        ProgressBar spinner = new ProgressBar(this);
+        spinner.setIndeterminate(true);
+        spinner.setIndeterminateTintList(ColorStateList.valueOf(Ui.ACCENT));
+        FrameLayout holder = new FrameLayout(this);
+        holder.addView(spinner, new FrameLayout.LayoutParams(
+                Ui.dp(this, 36), Ui.dp(this, 36), Gravity.CENTER));
+        holder.setMinimumHeight(Ui.dp(this, 44));
+        sheet.add(holder);
+        sheet.cancelable(false);
+        sheet.show();
         new Thread(() -> {
             String error = null;
             Station station = null;
@@ -304,7 +370,9 @@ public class SetupActivity extends Activity {
                 connection.setConnectTimeout(4000);
                 connection.setReadTimeout(4000);
                 connection.setRequestProperty("User-Agent", "MidiPult-Android/" + BuildConfig.VERSION_NAME);
-                if (connection.getResponseCode() != 200) throw new RuntimeException("HTTP " + connection.getResponseCode());
+                if (connection.getResponseCode() != 200) {
+                    throw new RuntimeException("HTTP " + connection.getResponseCode());
+                }
                 String text = new String(read(connection), "UTF-8");
                 JSONObject object = new JSONObject(text);
                 String version = object.optString("version", "");
@@ -319,10 +387,7 @@ public class SetupActivity extends Activity {
             final Station found = station;
             final String message = error;
             main.post(() -> {
-                try {
-                    dialog.dismiss();
-                } catch (Exception ignored) {
-                }
+                sheet.dismiss();
                 if (found != null) open(found);
                 else Toast.makeText(this, "Не удалось подключиться: " + message, Toast.LENGTH_LONG).show();
             });
@@ -359,9 +424,5 @@ public class SetupActivity extends Activity {
         } catch (Exception ignored) {
             return "";
         }
-    }
-
-    private int dp(int value) {
-        return Math.round(getResources().getDisplayMetrics().density * value);
     }
 }

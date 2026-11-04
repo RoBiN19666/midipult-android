@@ -84,6 +84,21 @@ public final class StationStore {
         save(context, stations);
     }
 
+    /** Сохраняет станцию: обновляет запись с тем же адресом или добавляет новую. */
+    public static void upsert(Context context, Station station) {
+        if (station == null || station.url.isEmpty()) return;
+        List<Station> stations = load(context);
+        for (int i = 0; i < stations.size(); i++) {
+            if (stations.get(i).url.equals(station.url)) {
+                stations.set(i, station);
+                save(context, stations);
+                return;
+            }
+        }
+        stations.add(station);
+        save(context, stations);
+    }
+
     public static void remove(Context context, Station station) {
         List<Station> stations = load(context);
         for (int i = 0; i < stations.size(); i++) {

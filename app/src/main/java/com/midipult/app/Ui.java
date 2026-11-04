@@ -1,17 +1,25 @@
 package com.midipult.app;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.text.InputType;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.ImageView;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -142,21 +150,31 @@ final class Ui {
         return button;
     }
 
-    static ImageView logo(Context context, int sizeDp) {
-        ImageView image = new ImageView(context);
-        int id = context.getResources().getIdentifier("ic_launcher", "drawable", context.getPackageName());
-        if (id != 0) image.setImageResource(id);
-        image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                dp(context, sizeDp), dp(context, sizeDp));
-        image.setLayoutParams(params);
-        GradientDrawable clip = new GradientDrawable();
-        clip.setColor(0x22FFFFFF);
-        clip.setCornerRadius(dp(context, 18));
-        clip.setStroke(1, 0x33FFFFFF);
-        image.setBackground(clip);
-        image.setClipToOutline(true);
-        return image;
+    static Drawable selectable(Context context) {
+        TypedValue value = new TypedValue();
+        if (context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, value, true)
+                && value.resourceId != 0) {
+            try {
+                return context.getDrawable(value.resourceId);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    static EditText field(Context context, String hint, String value) {
+        EditText edit = new EditText(context);
+        edit.setHint(hint);
+        edit.setText(value == null ? "" : value);
+        edit.setSingleLine(true);
+        edit.setTextSize(16);
+        edit.setTextColor(TEXT);
+        edit.setHintTextColor(MUTED);
+        edit.setInputType(InputType.TYPE_CLASS_TEXT);
+        edit.setSelectAllOnFocus(true);
+        edit.setPadding(dp(context, 14), dp(context, 12), dp(context, 14), dp(context, 12));
+        edit.setBackground(rounded(0xFF0E1322, dp(context, 12), STROKE, 1));
+        return edit;
     }
 
     static void applyInsets(Activity activity, View root, int horizontalDp) {
@@ -181,6 +199,29 @@ final class Ui {
         root.setBackground(background());
     }
 
+    /**
+     * Полноэкранный режим для WebView: контент занимает всю ширину и низ,
+     * сверху остаётся только место под статус-бар, снизу — навигационная панель.
+     */
+    static void edgeInsets(Activity activity, View root, final View content, final View bar) {
+        Window window = activity.getWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false);
+            window.setStatusBarColor(Color.TRANSPARENT);
+            window.setNavigationBarColor(Color.TRANSPARENT);
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                content.setPadding(0, bars.top, 0, 0);
+                bar.setPadding(bar.getPaddingLeft(), bar.getPaddingTop(),
+                        bar.getPaddingRight(), bars.bottom);
+                return insets;
+            });
+        } else {
+            window.setStatusBarColor(BG);
+            window.setNavigationBarColor(BG);
+        }
+    }
+
     static LinearLayout.LayoutParams lp(int width, int height, int topMarginDp, Context context) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
         if (topMarginDp != 0) params.topMargin = dp(context, topMarginDp);
@@ -192,5 +233,153 @@ final class Ui {
         view.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(context, heightDp)));
         return view;
+    }
+
+    /** Нижняя карточка вместо стандартных системных диалогов. */
+    static final class Sheet {
+        private final Context context;
+        private final Dialog dialog;
+        private final LinearLayout body;
+        private final LinearLayout buttons;
+
+        Sheet(Context context, String title, String subtitle) {
+            this.context = context;
+            dialog = new Dialog(context);
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            dialog.setCanceledOnTouchOutside(true);
+
+            LinearLayout card = new LinearLayout(context);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(context, 20), dp(context, 18), dp(context, 20), dp(context, 16));
+            card.setBackground(cardBackground());
+
+            card.addView(Ui.title(context, title, 20));
+            if (subtitle != null && !subtitle.isEmpty()) {
+                TextView sub = Ui.muted(context, subtitle, 12);
+                sub.setPadding(0, dp(context, 6), 0, 0);
+                card.addView(sub);
+            }
+
+            body = new LinearLayout(context);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setPadding(0, dp(context, 12), 0, 0);
+            card.addView(body);
+
+            buttons = new LinearLayout(context);
+            buttons.setOrientation(LinearLayout.HORIZONTAL);
+            buttons.setPadding(0, dp(context, 16), 0, 0);
+            card.addView(buttons);
+
+            FrameLayout wrapper = new FrameLayout(context);
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            int margin = dp(context, 10);
+            params.setMargins(margin, margin, margin, margin);
+            wrapper.addView(card, params);
+            dialog.setContentView(wrapper);
+
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                WindowManager.LayoutParams attrs = window.getAttributes();
+                attrs.dimAmount = 0.65f;
+                attrs.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                window.setAttributes(attrs);
+            }
+        }
+
+        Sheet add(View view) {
+            body.addView(view, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return this;
+        }
+
+        Sheet message(String text) {
+            TextView view = Ui.muted(context, text, 13);
+            body.addView(view);
+            return this;
+        }
+
+        Sheet row(String rowTitle, String subtitle, View.OnClickListener listener) {
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(context, 14), dp(context, 12), dp(context, 14), dp(context, 12));
+            row.addView(Ui.title(context, rowTitle, 15));
+            if (subtitle != null && !subtitle.isEmpty()) {
+                TextView sub = Ui.muted(context, subtitle, 12);
+                sub.setPadding(0, dp(context, 3), 0, 0);
+                row.addView(sub);
+            }
+            Drawable ripple = Ui.selectable(context);
+            if (ripple != null) row.setBackground(ripple);
+            row.setOnClickListener(listener);
+            body.addView(row, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return this;
+        }
+
+        Sheet negative(String text) {
+            Button button = Ui.ghost(context, text);
+            button.setOnClickListener(v -> dismiss());
+            place(button);
+            return this;
+        }
+
+        Sheet positive(String text, final Runnable action) {
+            Button button = Ui.primary(context, text);
+            button.setOnClickListener(v -> {
+                if (action != null) action.run();
+            });
+            place(button);
+            return this;
+        }
+
+        Sheet danger(String text, final Runnable action) {
+            Button button = Ui.danger(context, text);
+            button.setOnClickListener(v -> {
+                if (action != null) action.run();
+            });
+            place(button);
+            return this;
+        }
+
+        Sheet cancelable(boolean value) {
+            dialog.setCancelable(value);
+            dialog.setCanceledOnTouchOutside(value);
+            return this;
+        }
+
+        Sheet keyboard() {
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+                        | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            }
+            return this;
+        }
+
+        private void place(Button button) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    0, dp(context, 46), 1f);
+            params.setMargins(dp(context, 4), 0, dp(context, 4), 0);
+            buttons.addView(button, params);
+        }
+
+        void show() {
+            dialog.show();
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+        }
+
+        void dismiss() {
+            try {
+                dialog.dismiss();
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

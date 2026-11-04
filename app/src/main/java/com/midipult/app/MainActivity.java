@@ -6,17 +6,13 @@ import android.app.DownloadManager;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
-import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.webkit.CookieManager;
-import android.webkit.DownloadListener;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -30,21 +26,15 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.List;
-
-/** Основной экран: WebView с панелью, переключение станций и обновление APK. */
+/** Основной экран: полноэкранная панель, нижняя навигация и меню приложения. */
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER = 77;
-    private static final int BG = 0xFF0B0E18;
-    private static final int BAR = 0xFF111624;
-    private static final int TEXT = 0xFFEDF1FA;
-    private static final int MUTED = 0xFF8B95AD;
-    private static final int ACCENT = 0xFF7C5CFF;
 
+    private FrameLayout content;
+    private PullRefresh pull;
     private WebView webView;
-    private TextView title;
     private ProgressBar progress;
+    private LinearLayout bottomNav;
     private LinearLayout errorView;
     private TextView errorText;
     private Station station;
@@ -54,9 +44,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Window window = getWindow();
-        window.setStatusBarColor(BG);
-        window.setNavigationBarColor(BG);
         station = StationStore.active(this);
         if (station == null) {
             startActivity(new Intent(this, SetupActivity.class));
@@ -65,7 +52,7 @@ public class MainActivity extends Activity {
         }
         View root = build();
         setContentView(root);
-        Ui.applyInsets(this, root, 10);
+        Ui.edgeInsets(this, root, content, bottomNav);
         load(station);
         UpdateChecker.autoCheck(this, (info, error) -> {
             if (isFinishing() || isDestroyed()) return;
@@ -76,81 +63,54 @@ public class MainActivity extends Activity {
     private View build() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Ui.BG);
 
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4));
+        content = new FrameLayout(this);
+        content.setBackgroundColor(Ui.BG);
 
-        bar.addView(Ui.logo(this, 34), new LinearLayout.LayoutParams(
-                Ui.dp(this, 34), Ui.dp(this, 34)));
-
-        title = Ui.title(this, "MidiPult", 16);
-        title.setSingleLine(true);
-        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        titleParams.leftMargin = Ui.dp(this, 10);
-        bar.addView(title, titleParams);
-
-        Button stations = Ui.icon(this, "☰");
-        stations.setTextSize(18);
-        stations.setContentDescription("Станции");
-        stations.setOnClickListener(v -> chooseStation());
-        bar.addView(stations, iconParams(42));
-
-        Button rename = Ui.icon(this, "✎");
-        rename.setTextSize(15);
-        rename.setContentDescription("Переименовать станцию");
-        rename.setOnClickListener(v -> renameCurrent());
-        bar.addView(rename, iconParams(42));
-
-        Button refresh = Ui.icon(this, "↻");
-        refresh.setTextSize(18);
-        refresh.setContentDescription("Обновить страницу");
-        refresh.setOnClickListener(v -> {
-            hideError();
-            webView.reload();
-        });
-        bar.addView(refresh, iconParams(42));
-
-        Button apk = Ui.icon(this, "APK");
-        apk.setTextSize(10);
-        apk.setContentDescription("Проверить обновление приложения");
-        apk.setOnClickListener(v -> checkAppUpdate());
-        bar.addView(apk, iconParams(48));
-        root.addView(bar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 54)));
+        pull = new PullRefresh(this);
+        webView = new PageWebView(this);
+        webView.setBackgroundColor(Ui.BG);
+        pull.content(webView);
+        setupWebView();
+        pull.setListener(this::reload);
+        content.addView(pull, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setIndeterminate(true);
         progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));
         progress.setVisibility(View.GONE);
-        root.addView(progress, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 2)));
+        content.addView(progress, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 2), Gravity.TOP));
 
-        FrameLayout body = new FrameLayout(this);
-        body.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 8));
-        root.addView(body, new LinearLayout.LayoutParams(
+        errorView = buildError();
+        FrameLayout.LayoutParams errorParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        errorParams.gravity = Gravity.CENTER;
+        int margin = Ui.dp(this, 18);
+        errorParams.setMargins(margin, margin, margin, margin);
+        content.addView(errorView, errorParams);
+
+        root.addView(content, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        webView = new WebView(this);
-        webView.setBackgroundColor(Ui.BG);
-        webView.setBackground(Ui.cardBackground());
-        webView.setClipToOutline(true);
-        body.addView(webView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        setupWebView();
+        bottomNav = buildNav();
+        root.addView(bottomNav, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return root;
+    }
 
-        errorView = new LinearLayout(this);
-        errorView.setOrientation(LinearLayout.VERTICAL);
-        errorView.setGravity(Gravity.CENTER);
-        errorView.setPadding(Ui.dp(this, 24), Ui.dp(this, 24), Ui.dp(this, 24), Ui.dp(this, 24));
-        errorView.setBackground(Ui.cardBackground());
-        errorView.setVisibility(View.GONE);
+    private LinearLayout buildError() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(Ui.dp(this, 24), Ui.dp(this, 24), Ui.dp(this, 24), Ui.dp(this, 24));
+        box.setBackground(Ui.cardBackground());
+        box.setVisibility(View.GONE);
         errorText = Ui.title(this, "", 16);
         errorText.setGravity(Gravity.CENTER);
-        errorView.addView(errorText);
+        box.addView(errorText);
         Button retry = Ui.primary(this, "Повторить");
         retry.setOnClickListener(v -> {
             hideError();
@@ -159,20 +119,62 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams retryParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, Ui.dp(this, 44));
         retryParams.topMargin = Ui.dp(this, 14);
-        errorView.addView(retry, retryParams);
-        FrameLayout.LayoutParams errorParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        errorParams.gravity = Gravity.CENTER;
-        errorParams.setMargins(Ui.dp(this, 18), Ui.dp(this, 18), Ui.dp(this, 18), Ui.dp(this, 18));
-        body.addView(errorView, errorParams);
-        return root;
+        box.addView(retry, retryParams);
+        return box;
     }
 
-    private LinearLayout.LayoutParams iconParams(int dp) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                Ui.dp(this, dp), Ui.dp(this, 42));
-        params.leftMargin = Ui.dp(this, 4);
-        return params;
+    private LinearLayout buildNav() {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setBackgroundColor(0xFF0C1120);
+
+        View line = new View(this);
+        line.setBackgroundColor(Ui.STROKE);
+        column.addView(line, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1))));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(navItem("▣", "Панель", true, null), weight());
+        row.addView(navItem("☰", "Станции", false, v -> openStations()), weight());
+        row.addView(navItem("⋯", "Меню", false, v -> showMenu()), weight());
+        column.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 58)));
+        return column;
+    }
+
+    private LinearLayout.LayoutParams weight() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+    }
+
+    private View navItem(String icon, String label, boolean active, View.OnClickListener click) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        int color = active ? Ui.ACCENT : Ui.MUTED;
+
+        TextView glyph = new TextView(this);
+        glyph.setText(icon);
+        glyph.setTextSize(17);
+        glyph.setTextColor(color);
+        glyph.setGravity(Gravity.CENTER);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(11);
+        text.setTextColor(color);
+        text.setGravity(Gravity.CENTER);
+        text.setPadding(0, Ui.dp(this, 3), 0, 0);
+
+        item.addView(glyph);
+        item.addView(text);
+        if (click != null) {
+            item.setOnClickListener(click);
+            android.graphics.drawable.Drawable ripple = Ui.selectable(this);
+            if (ripple != null) item.setBackground(ripple);
+        }
+        return item;
     }
 
     private void setupWebView() {
@@ -208,6 +210,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
+                if (pull != null) pull.finishRefresh();
             }
 
             @Override
@@ -280,55 +283,77 @@ public class MainActivity extends Activity {
 
     private void load(Station target) {
         station = target;
-        title.setText(target.name == null || target.name.isEmpty() ? target.ip : target.name);
         hideError();
         webView.loadUrl(target.url);
     }
 
-    private void chooseStation() {
-        List<Station> stations = StationStore.load(this);
-        if (stations.isEmpty()) {
-            startActivity(new Intent(this, SetupActivity.class).putExtra(SetupActivity.EXTRA_MANAGE, true));
-            return;
+    private void reload() {
+        if (webView == null) return;
+        hideError();
+        String current = webView.getUrl();
+        if (current == null && station != null) {
+            webView.loadUrl(station.url);
+        } else {
+            webView.reload();
         }
-        final List<String> labels = new ArrayList<>();
-        for (Station item : stations) labels.add(item.label());
-        new AlertDialog.Builder(this)
-                .setTitle("Станции")
-                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
-                    Station picked = stations.get(which);
-                    StationStore.setActive(this, picked);
-                    load(picked);
-                })
-                .setNeutralButton("Найти ещё", (dialog, which) ->
-                        startActivity(new Intent(this, SetupActivity.class)
-                                .putExtra(SetupActivity.EXTRA_MANAGE, true)))
-                .setNegativeButton("Отмена", null)
-                .show();
+    }
+
+    private void openStations() {
+        startActivity(new Intent(this, SetupActivity.class)
+                .putExtra(SetupActivity.EXTRA_MANAGE, true));
+    }
+
+    private void showMenu() {
+        String stationLabel = station == null ? ""
+                : (station.name == null || station.name.isEmpty() ? station.ip : station.name);
+        String stationUrl = station == null ? "" : station.url;
+        final Ui.Sheet sheet = new Ui.Sheet(this, "MidiPult",
+                "Android-оболочка панели · v" + BuildConfig.VERSION_NAME);
+        sheet.row("Станции и подключение", "Добавить, переименовать или удалить",
+                v -> {
+                    sheet.dismiss();
+                    openStations();
+                });
+        sheet.row("Переименовать станцию", stationLabel, v -> {
+            sheet.dismiss();
+            renameCurrent();
+        });
+        sheet.row("Проверить обновление", "Текущая версия " + BuildConfig.VERSION_NAME, v -> {
+            sheet.dismiss();
+            checkAppUpdate();
+        });
+        sheet.row("Открыть в браузере", stationUrl, v -> {
+            sheet.dismiss();
+            openExternal(stationUrl);
+        });
+        sheet.negative("Закрыть");
+        sheet.show();
+    }
+
+    private void openExternal(String url) {
+        if (url == null || url.isEmpty()) return;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception ignored) {
+        }
     }
 
     private void renameCurrent() {
         if (station == null) return;
-        android.widget.EditText input = new android.widget.EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-        input.setText(station.name == null ? "" : station.name);
-        input.setHint("Например, «Кухня»");
-        input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this)
-                .setTitle("Название станции")
-                .setView(input)
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Сохранить", (dialog, which) -> {
-                    StationStore.rename(this, station, input.getText().toString());
-                    Station updated = StationStore.active(this);
-                    if (updated != null) {
-                        station = updated;
-                        title.setText(updated.name == null || updated.name.isEmpty()
-                                ? updated.ip : updated.name);
-                    }
-                    Toast.makeText(this, "Название сохранено", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+        final Ui.Sheet sheet = new Ui.Sheet(this, "Название станции",
+                "Так станция будет видна в списке и в меню");
+        final android.widget.EditText input = Ui.field(this, "Например, «Кухня»", station.name);
+        sheet.add(input);
+        sheet.keyboard();
+        sheet.negative("Отмена");
+        sheet.positive("Сохранить", () -> {
+            StationStore.rename(this, station, input.getText().toString());
+            Station updated = StationStore.active(this);
+            if (updated != null) station = updated;
+            Toast.makeText(this, "Название сохранено", Toast.LENGTH_SHORT).show();
+            sheet.dismiss();
+        });
+        sheet.show();
     }
 
     private void checkAppUpdate() {
@@ -378,6 +403,7 @@ public class MainActivity extends Activity {
 
     private void showError(String message) {
         progress.setVisibility(View.GONE);
+        if (pull != null) pull.finishRefresh();
         errorText.setText(message);
         errorView.setVisibility(View.VISIBLE);
     }
@@ -400,8 +426,19 @@ public class MainActivity extends Activity {
         super.onResume();
         if (webView != null) webView.onResume();
         Station active = StationStore.active(this);
-        if (active != null && station != null && !active.url.equals(station.url)) {
+        if (active == null) {
+            // Станцию удалили из списка — возвращаемся к выбору.
+            if (!isFinishing()) {
+                startActivity(new Intent(this, SetupActivity.class));
+                finish();
+            }
+            return;
+        }
+        if (station == null || !active.url.equals(station.url)) {
             load(active);
+        } else {
+            // Имя могли изменить в экране «Станции» — обновляем данные.
+            station = active;
         }
     }
 
@@ -424,6 +461,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (pull != null) pull.finishRefresh();
         if (webView != null) {
             webView.destroy();
             webView = null;
@@ -431,7 +469,18 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    private int dp(int value) {
-        return Math.round(getResources().getDisplayMetrics().density * value);
+    /**
+     * WebView по умолчанию запрещает родителю перехватывать жесты, из-за чего
+     * перестаёт работать обновление «потянуть вниз».
+     */
+    private static final class PageWebView extends WebView {
+        PageWebView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+            super.requestDisallowInterceptTouchEvent(false);
+        }
     }
 }
