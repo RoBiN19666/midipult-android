@@ -58,6 +58,18 @@ jobs:
           echo "name=$VERSION" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare release notes
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        run: |
+          NOTES="release-notes/${{ steps.version.outputs.name }}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "Release notes not found: $NOTES" >&2
+            echo "Create release-notes/<version>.md before tagging." >&2
+            exit 1
+          fi
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
       - name: Verify tag matches version
         if: startsWith(github.ref, 'refs/tags/android-v')
         run: |
@@ -138,10 +150,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: MidiPult Android ${{ steps.version.outputs.name }}
-          body: |
-            Android-оболочка MidiPult ${{ steps.version.outputs.name }}.
-            Панель загружается с вашей станции; обновления панели не требуют
-            пересборки APK.
+          body_path: ${{ steps.notes.outputs.path }}
           files: |
             midipult-android-${{ steps.version.outputs.name }}.apk
             midipult-android-${{ steps.version.outputs.name }}.apk.sha256
