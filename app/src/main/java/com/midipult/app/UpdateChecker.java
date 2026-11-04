@@ -151,7 +151,15 @@ public final class UpdateChecker {
             context.startActivity(intent);
             return true;
         } catch (Exception exc) {
-            Toast.makeText(context, "Не удалось открыть установщик: " + exc.getMessage(), Toast.LENGTH_LONG).show();
+            try {
+                Intent settings = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + context.getPackageName()));
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(settings);
+                Toast.makeText(context, "Разрешите установку из этого источника", Toast.LENGTH_LONG).show();
+            } catch (Exception ignored) {
+                Toast.makeText(context, "Не удалось открыть установщик: " + exc.getMessage(), Toast.LENGTH_LONG).show();
+            }
             return false;
         }
     }
@@ -162,11 +170,6 @@ public final class UpdateChecker {
         for (int i = 0; i < assets.length(); i++) {
             JSONObject asset = assets.optJSONObject(i);
             if (asset != null && expected.equals(asset.optString("name", ""))) return asset;
-        }
-        for (int i = 0; i < assets.length(); i++) {
-            JSONObject asset = assets.optJSONObject(i);
-            String name = asset == null ? "" : asset.optString("name", "");
-            if (name.startsWith("midipult-android-") && name.endsWith(".apk")) return asset;
         }
         return null;
     }

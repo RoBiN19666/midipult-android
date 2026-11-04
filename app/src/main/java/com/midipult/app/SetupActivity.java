@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -62,46 +63,49 @@ public class SetupActivity extends Activity {
             open(active);
             return;
         }
-        setContentView(build());
+        View root = build();
+        setContentView(root);
+        Ui.applyInsets(this, root, 20);
         render(StationStore.load(this));
-        scan();
+        if (savedInstanceState == null) scan();
     }
 
     private View build() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(24), dp(24), dp(24), dp(18));
-        root.setBackgroundColor(BG);
 
-        TextView title = new TextView(this);
-        title.setText("MidiPult");
-        title.setTextSize(30);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(TEXT);
-        root.addView(title);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.HORIZONTAL);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        brand.addView(Ui.logo(this, 56), new LinearLayout.LayoutParams(
+                Ui.dp(this, 56), Ui.dp(this, 56)));
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("Пульт для Яндекс Станции Миди");
-        subtitle.setTextSize(14);
-        subtitle.setTextColor(MUTED);
-        subtitle.setPadding(0, dp(4), 0, dp(18));
-        root.addView(subtitle);
+        LinearLayout brandText = new LinearLayout(this);
+        brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.setPadding(Ui.dp(this, 14), 0, 0, 0);
+        TextView title = Ui.title(this, "MidiPult", 28);
+        brandText.addView(title);
+        brandText.addView(Ui.muted(this, "Пульт для Яндекс Станции Миди", 13));
+        brand.addView(brandText, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(brand);
 
+        LinearLayout statusCard = Ui.card(this);
+        status = Ui.muted(this, "Ищу колонки в сети…", 13);
+        statusCard.addView(status);
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setIndeterminate(true);
+        progress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(Ui.ACCENT));
         progress.setVisibility(View.GONE);
-        root.addView(progress, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
-
-        status = new TextView(this);
-        status.setTextSize(13);
-        status.setTextColor(MUTED);
-        status.setPadding(0, dp(10), 0, dp(10));
-        root.addView(status);
+        statusCard.addView(progress, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 3)));
+        root.addView(statusCard, Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 18, this));
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        scrollParams.topMargin = Ui.dp(this, 16);
         root.addView(scroll, scrollParams);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -110,33 +114,24 @@ public class SetupActivity extends Activity {
         LinearLayout buttons = new LinearLayout(this);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
         buttons.setGravity(Gravity.CENTER_VERTICAL);
-        buttons.setPadding(0, dp(12), 0, 0);
+        buttons.setPadding(0, Ui.dp(this, 12), 0, 0);
 
-        scanButton = new Button(this);
-        scanButton.setText("Сканировать");
-        scanButton.setAllCaps(false);
-        scanButton.setTextColor(Color.WHITE);
-        scanButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        scanButton = Ui.primary(this, "Сканировать");
         scanButton.setOnClickListener(v -> scan());
         buttons.addView(scanButton, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                Ui.dp(this, 48), 1f));
 
-        Button manual = new Button(this);
-        manual.setText("IP вручную");
-        manual.setAllCaps(false);
-        manual.setTextColor(TEXT);
+        Button manual = Ui.ghost(this, "IP вручную");
         manual.setOnClickListener(v -> manual());
         LinearLayout.LayoutParams manualParams = new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        manualParams.setMargins(dp(8), 0, 0, 0);
+                Ui.dp(this, 48), 1f);
+        manualParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         buttons.addView(manual, manualParams);
         root.addView(buttons);
 
-        TextView hint = new TextView(this);
-        hint.setText("Колонка и телефон должны быть в одной Wi-Fi сети.");
-        hint.setTextSize(12);
-        hint.setTextColor(MUTED);
-        hint.setPadding(0, dp(12), 0, 0);
+        TextView hint = Ui.muted(this,
+                "Колонка и телефон должны быть в одной Wi-Fi сети.\nМожно переименовать станцию кнопкой ✎.", 12);
+        hint.setPadding(0, Ui.dp(this, 12), 0, 0);
         root.addView(hint);
         return root;
     }
@@ -187,27 +182,41 @@ public class SetupActivity extends Activity {
 
     private void render(List<Station> stations) {
         list.removeAllViews();
+        if (stations.isEmpty()) {
+            LinearLayout empty = Ui.card(this);
+            empty.setGravity(Gravity.CENTER_HORIZONTAL);
+            ImageView logo = Ui.logo(this, 64);
+            LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(
+                    Ui.dp(this, 64), Ui.dp(this, 64));
+            logoParams.gravity = Gravity.CENTER_HORIZONTAL;
+            empty.addView(logo, logoParams);
+            TextView title = Ui.title(this, "Пока нет станций", 18);
+            title.setGravity(Gravity.CENTER_HORIZONTAL);
+            title.setPadding(0, Ui.dp(this, 12), 0, 0);
+            empty.addView(title);
+            TextView text = Ui.muted(this,
+                    "Нажмите «Сканировать» — приложение найдёт панель в этой Wi-Fi сети.",
+                    13);
+            text.setGravity(Gravity.CENTER_HORIZONTAL);
+            text.setPadding(0, Ui.dp(this, 6), 0, 0);
+            empty.addView(text);
+            list.addView(empty);
+            return;
+        }
         for (Station station : stations) list.addView(row(station));
     }
 
     private View row(Station station) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(14), dp(12), dp(14), dp(12));
-        box.setBackgroundColor(CARD);
+        LinearLayout box = Ui.card(this);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.setMargins(0, 0, 0, dp(8));
+        params.setMargins(0, 0, 0, Ui.dp(this, 10));
         box.setLayoutParams(params);
 
-        TextView name = new TextView(this);
-        name.setText(station.name == null || station.name.isEmpty() ? station.ip : station.name);
-        name.setTextSize(16);
-        name.setTypeface(Typeface.DEFAULT_BOLD);
-        name.setTextColor(TEXT);
+        TextView name = Ui.title(this,
+                station.name == null || station.name.isEmpty() ? station.ip : station.name, 17);
         box.addView(name);
 
-        TextView meta = new TextView(this);
         List<String> bits = new ArrayList<>();
         if (!station.ip.isEmpty()) bits.add(station.ip);
         if (!station.version.isEmpty()) bits.add("панель v" + station.version);
@@ -216,29 +225,24 @@ public class SetupActivity extends Activity {
             if (metaText.length() > 0) metaText.append(" · ");
             metaText.append(bit);
         }
-        meta.setText(metaText.length() == 0 ? station.url : metaText.toString());
-        meta.setTextSize(12);
-        meta.setTextColor(MUTED);
-        meta.setPadding(0, dp(3), 0, dp(8));
+        TextView meta = Ui.muted(this,
+                metaText.length() == 0 ? station.url : metaText.toString(), 12);
+        meta.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 10));
         box.addView(meta);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button open = new Button(this);
-        open.setText("Открыть");
-        open.setAllCaps(false);
+        Button open = Ui.primary(this, "Открыть");
         open.setOnClickListener(v -> open(station));
-        actions.addView(open, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        actions.addView(open, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));
 
-        Button rename = new Button(this);
-        rename.setText("✎");
+        Button rename = Ui.icon(this, "✎");
         rename.setContentDescription("Переименовать станцию");
         rename.setOnClickListener(v -> rename(station));
         LinearLayout.LayoutParams renameParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        renameParams.setMargins(dp(8), 0, 0, 0);
+                Ui.dp(this, 46), Ui.dp(this, 44));
+        renameParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         actions.addView(rename, renameParams);
         box.addView(actions);
 
@@ -275,7 +279,7 @@ public class SetupActivity extends Activity {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         input.setHint("http://192.168.31.220:8055");
-        input.setText("http://192.168.31.220:8055");
+        input.setText("");
         input.setSelectAllOnFocus(true);
         new AlertDialog.Builder(this)
                 .setTitle("Адрес панели")

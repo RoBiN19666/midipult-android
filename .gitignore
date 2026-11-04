@@ -4,6 +4,8 @@ app/build/
 local.properties
 app/release.keystore
 *.keystore
+.signing/
+.artifacts/
 *.apk
 *.apk.sha256
 .idea/
