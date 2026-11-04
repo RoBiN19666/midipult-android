@@ -1,26 +1,14 @@
-<div align="center">
-
-<img src="docs/img/logo.png" alt="MidiPult Android" width="520">
-
 # MidiPult Android
+
+<p align="center">
+  <img src="docs/img/logo.png" alt="MidiPult — панель Яндекс Станции Миди" width="520">
+</p>
 
 **Пульт для Яндекс Станции Миди — в кармане.**
 
-[![Release](https://img.shields.io/github/v/release/RoBiN19666/midipult-android?style=for-the-badge&label=release&color=7C5CFF)](https://github.com/RoBiN19666/midipult-android/releases)
-[![Android](https://img.shields.io/badge/Android-5.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/RoBiN19666/midipult-android)
-[![WebView](https://img.shields.io/badge/WebView-тонкая_оболочка-22D3EE?style=for-the-badge)](https://github.com/RoBiN19666/midipult-android)
-
-[Репозиторий приложения Android](https://github.com/RoBiN19666/midipult-android) ·
-[Репозиторий панели](https://github.com/RoBiN19666/midipult) ·
 [Скачать APK](https://github.com/RoBiN19666/midipult-android/releases/latest)
 
-</div>
-
----
-
-## Что это
-
-Тонкая Android-оболочка вокруг веб-панели **MidiPult**. Приложение не содержит
+Тонкая Android-оболочка вокруг веб-панели **[MidiPult](https://github.com/RoBiN19666/midipult)**. Приложение не содержит
 интерфейс панели: оно находит станцию в локальной сети и открывает её WebView.
 Поэтому изменения панели **не требуют пересборки APK**.
 
