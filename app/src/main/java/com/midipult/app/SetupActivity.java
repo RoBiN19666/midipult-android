@@ -12,6 +12,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -68,6 +69,30 @@ public class SetupActivity extends Activity {
         } else {
             status.setText(getString(R.string.setup_status_saved, saved.size()));
         }
+        animateContentIn();
+    }
+
+    /** Анимируется только контент: нижнее меню остаётся статичным. */
+    private void animateContentIn() {
+        contentArea.setAlpha(0f);
+        contentArea.setTranslationY(Ui.dp(this, 12));
+        contentArea.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(180L)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void noTransition() {
+        overridePendingTransition(0, 0);
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        noTransition();
     }
 
     private View build() {
@@ -169,6 +194,7 @@ public class SetupActivity extends Activity {
             return;
         }
         startActivity(new Intent(this, MainActivity.class));
+        noTransition();
         finish();
     }
 
@@ -452,6 +478,7 @@ public class SetupActivity extends Activity {
             return;
         }
         startActivity(new Intent(this, MainActivity.class));
+        noTransition();
         finish();
     }
 

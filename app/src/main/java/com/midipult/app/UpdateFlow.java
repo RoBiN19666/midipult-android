@@ -71,6 +71,7 @@ final class UpdateFlow {
                     sheet.showReady(file, info.hasChecksum(), () -> {
                         // Если установка не началась (нет разрешения) — оставляем
                         // экран открытым, чтобы после настроек можно было повторить.
+                        UpdateChecker.markPendingInstall(activity, info.version);
                         if (UpdateChecker.install(activity, file)) sheet.dismiss();
                     }, sheet::dismiss);
                 });

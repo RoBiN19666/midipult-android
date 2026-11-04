@@ -28,6 +28,9 @@ import java.util.concurrent.Executors;
 
 /** Проверка и установка обновлений самого APK из GitHub Releases. */
 public final class UpdateChecker {
+    private static final String UPDATE_PREFS = "midipult_updates";
+    private static final String PENDING_VERSION = "pending_version";
+
     public interface Callback {
         void onResult(UpdateInfo info, String error);
     }
@@ -218,8 +221,36 @@ public final class UpdateChecker {
         }
     }
 
-    private static boolean canInstall(Context context) {
+    /** Запомнить версию, для которой открыт системный установщик. */
+    public static void markPendingInstall(Context context, String version) {
+        if (version == null || version.trim().isEmpty()) return;
+        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+                .edit().putString(PENDING_VERSION, version).apply();
+    }
+
+    /**
+     * Удалить скачанные APK после того, как новая версия действительно установлена.
+     * Пока установка не завершена или отменена, файл остаётся для повтора.
+     */
+    public static void cleanupAfterInstall(Context context) {
         try {
+            String pending = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+                    .getString(PENDING_VERSION, "");
+            if (pending == null || pending.isEmpty()) return;
+            String installed = context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(), 0).versionName;
+            if (!pending.equals(installed)) return;
+            File dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            if (dir == null) dir = context.getCacheDir();
+            if (dir != null) cleanupOldApks(dir, null);
+            context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+                    .edit().remove(PENDING_VERSION).apply();
+        } catch (Exception ignored) {
+            // Не мешаем запуску приложения из-за очистки.
+        }
+    }
+
+    private static boolean canInstall(Context context) {        try {
             return context.getPackageManager().canRequestPackageInstalls();
         } catch (Exception ignored) {
             return true;

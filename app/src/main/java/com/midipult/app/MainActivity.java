@@ -103,6 +103,7 @@ public class MainActivity extends Activity {
         station = StationStore.active(this);
         if (station == null) {
             startActivity(new Intent(this, SetupActivity.class));
+            overridePendingTransition(0, 0);
             finish();
             return;
         }
@@ -603,6 +604,8 @@ public class MainActivity extends Activity {
     private void openStations() {
         startActivity(new Intent(this, SetupActivity.class)
                 .putExtra(SetupActivity.EXTRA_MANAGE, true));
+        // Нижнее меню в новом экране должно появиться сразу, без window-анимации.
+        overridePendingTransition(0, 0);
     }
 
     private void showMenu() {
@@ -658,6 +661,7 @@ public class MainActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
+        UpdateChecker.cleanupAfterInstall(this);
         if (rendererGone) {
             recreate();
             return;
@@ -668,6 +672,7 @@ public class MainActivity extends Activity {
             // Станцию удалили из списка — возвращаемся к выбору.
             if (!isFinishing()) {
                 startActivity(new Intent(this, SetupActivity.class));
+                overridePendingTransition(0, 0);
                 finish();
             }
             return;
