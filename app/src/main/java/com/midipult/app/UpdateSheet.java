@@ -15,10 +15,10 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
-import java.util.Locale;
 
 /** Кастомный экран обновления APK: проверка, загрузка с прогрессом, ошибки и установка. */
 final class UpdateSheet {
@@ -44,7 +44,7 @@ final class UpdateSheet {
         card.setPadding(Ui.dp(context, 20), Ui.dp(context, 18),
                 Ui.dp(context, 20), Ui.dp(context, 16));
         card.setBackground(Ui.cardBackground());
-        card.addView(Ui.title(context, "Обновление MidiPult", 20));
+        card.addView(Ui.title(context, context.getString(R.string.update_title), 20));
 
         subtitle = Ui.muted(context, "", 12);
         subtitle.setPadding(0, Ui.dp(context, 6), 0, 0);
@@ -53,7 +53,11 @@ final class UpdateSheet {
         body = new LinearLayout(context);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(0, Ui.dp(context, 12), 0, 0);
-        card.addView(body);
+        MaxHeightScrollView bodyScroll = new MaxHeightScrollView(context, maxBodyHeight(context));
+        bodyScroll.addView(body, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(bodyScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         buttons = new LinearLayout(context);
         buttons.setOrientation(LinearLayout.VERTICAL);
@@ -100,44 +104,40 @@ final class UpdateSheet {
         return dismissed;
     }
 
-    boolean isShowing() {
-        return dialog.isShowing();
-    }
-
     void showChecking() {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Проверяю обновление…");
+        subtitle.setText(context.getString(R.string.update_checking));
         reset();
-        body.addView(spinnerRow("Смотрю новые версии на GitHub…"));
-        addButton(Ui.ghost(context, "Закрыть"), this::dismiss);
+        body.addView(spinnerRow(context.getString(R.string.update_checking_hint)));
+        addButton(Ui.ghost(context, context.getString(R.string.action_close)), this::dismiss);
     }
 
     void showUpToDate(String version) {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Обновлений нет");
+        subtitle.setText(context.getString(R.string.update_up_to_date));
         reset();
-        body.addView(message("Установлена последняя версия — " + version + "."));
-        body.addView(hint("Новые версии проверяются автоматически раз в сутки."));
-        addButton(Ui.ghost(context, "Закрыть"), this::dismiss);
+        body.addView(message(context.getString(R.string.update_latest, version)));
+        body.addView(hint(context.getString(R.string.update_auto_hint)));
+        addButton(Ui.ghost(context, context.getString(R.string.action_close)), this::dismiss);
     }
 
     void showCheckError(String error, Runnable retry) {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Не удалось проверить обновление");
+        subtitle.setText(context.getString(R.string.update_check_failed));
         reset();
-        body.addView(message("Проверьте подключение к интернету и попробуйте ещё раз."));
+        body.addView(message(context.getString(R.string.update_check_failed_hint)));
         if (!TextUtils.isEmpty(error)) body.addView(hint(error));
-        addButton(Ui.primary(context, "Повторить"), retry);
-        addButton(Ui.ghost(context, "Закрыть"), this::dismiss);
+        addButton(Ui.primary(context, context.getString(R.string.action_retry)), retry);
+        addButton(Ui.ghost(context, context.getString(R.string.action_close)), this::dismiss);
     }
 
     void showAvailable(final UpdateChecker.UpdateInfo info, Runnable download, Runnable later) {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Доступна версия " + info.version);
+        subtitle.setText(context.getString(R.string.update_available, info.version));
         reset();
 
         TextView notes = Ui.muted(context, compactNotes(info.body), 13);
@@ -146,7 +146,7 @@ final class UpdateSheet {
         body.addView(notes);
 
         StringBuilder meta = new StringBuilder();
-        if (info.size > 0) meta.append("Размер ").append(size(info.size));
+        if (info.size > 0) meta.append(context.getString(R.string.update_size, size(info.size)));
         if (!info.digest.isEmpty()) {
             if (meta.length() > 0) meta.append(" · ");
             meta.append("SHA-256 ").append(info.digest.substring(0, Math.min(12, info.digest.length())))
@@ -154,14 +154,14 @@ final class UpdateSheet {
         }
         body.addView(hint(meta.toString()));
 
-        addButton(Ui.primary(context, "Скачать и установить"), download);
-        addButton(Ui.ghost(context, "Позже"), later);
+        addButton(Ui.primary(context, context.getString(R.string.update_download_install)), download);
+        addButton(Ui.ghost(context, context.getString(R.string.update_later)), later);
     }
 
-    void showDownloading(UpdateChecker.UpdateInfo info) {
+    void showDownloading(UpdateChecker.UpdateInfo info, Runnable cancel) {
         downloading = true;
         setCancelable(false);
-        subtitle.setText("Скачиваю версию " + info.version);
+        subtitle.setText(context.getString(R.string.update_downloading, info.version));
         reset();
 
         progressBar = new ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal);
@@ -175,6 +175,7 @@ final class UpdateSheet {
         progressText = Ui.muted(context, "0%", 12);
         progressText.setPadding(0, Ui.dp(context, 10), 0, 0);
         body.addView(progressText);
+        addButton(Ui.ghost(context, context.getString(R.string.action_cancel)), cancel);
     }
 
     void setProgress(long downloaded, long total) {
@@ -183,33 +184,36 @@ final class UpdateSheet {
             int percent = (int) Math.max(0, Math.min(100, downloaded * 100 / total));
             progressBar.setIndeterminate(false);
             progressBar.setProgress(percent);
-            progressText.setText(percent + "% · " + size(downloaded) + " из " + size(total));
+            progressText.setText(context.getString(R.string.update_percent, percent,
+                    size(downloaded), size(total)));
         } else {
-            progressText.setText("Скачано " + size(downloaded));
+            progressText.setText(context.getString(R.string.update_downloaded, size(downloaded)));
         }
     }
 
     void showDownloadError(String error, Runnable retry) {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Загрузка не удалась");
+        subtitle.setText(context.getString(R.string.update_download_failed));
         reset();
-        body.addView(message("Не удалось скачать обновление."));
+        body.addView(message(context.getString(R.string.update_download_failed_message)));
         if (!TextUtils.isEmpty(error)) body.addView(hint(error));
-        addButton(Ui.primary(context, "Повторить"), retry);
-        addButton(Ui.ghost(context, "Закрыть"), this::dismiss);
+        addButton(Ui.primary(context, context.getString(R.string.action_retry)), retry);
+        addButton(Ui.ghost(context, context.getString(R.string.action_close)), this::dismiss);
     }
 
-    void showReady(File file, Runnable install, Runnable later) {
+    void showReady(File file, boolean verified, Runnable install, Runnable later) {
         downloading = false;
         setCancelable(true);
-        subtitle.setText("Готово к установке");
+        subtitle.setText(context.getString(R.string.update_ready));
         reset();
-        body.addView(message("APK скачан и проверен по SHA-256."));
+        body.addView(message(context.getString(verified
+                ? R.string.update_ready_verified
+                : R.string.update_ready_unverified)));
         if (file != null) body.addView(hint(file.getName()));
-        body.addView(hint("Откроется системный установщик — подтвердите установку."));
-        addButton(Ui.primary(context, "Установить"), install);
-        addButton(Ui.ghost(context, "Позже"), later);
+        body.addView(hint(context.getString(R.string.update_installer_hint)));
+        addButton(Ui.primary(context, context.getString(R.string.update_install)), install);
+        addButton(Ui.ghost(context, context.getString(R.string.update_later)), later);
     }
 
     private void setCancelable(boolean value) {
@@ -263,13 +267,38 @@ final class UpdateSheet {
         button.setOnClickListener(v -> {
             if (action != null) action.run();
         });
+        button.setMinHeight(Ui.dp(context, 48));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(context, 48));
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         if (buttons.getChildCount() > 0) params.topMargin = Ui.dp(context, 8);
         buttons.addView(button, params);
     }
 
-    private static String compactNotes(String body) {
+    private static int maxBodyHeight(Context context) {
+        int screen = context.getResources().getDisplayMetrics().heightPixels;
+        return Math.max(Ui.dp(context, 160), (int) (screen * 0.52f));
+    }
+
+    private static final class MaxHeightScrollView extends ScrollView {
+        private final int maxHeight;
+
+        MaxHeightScrollView(Context context, int maxHeight) {
+            super(context);
+            this.maxHeight = maxHeight;
+            setFillViewport(false);
+            setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            if (getMeasuredHeight() > maxHeight) {
+                setMeasuredDimension(getMeasuredWidth(), maxHeight);
+            }
+        }
+    }
+
+    private String compactNotes(String body) {
         String notes = body == null ? "" : body.trim();
         String[] lines = notes.split("\n");
         StringBuilder result = new StringBuilder();
@@ -281,14 +310,15 @@ final class UpdateSheet {
             if (result.length() > 420) break;
         }
         if (result.length() > 420) result.setLength(420);
-        return result.length() == 0 ? "Доступна новая версия приложения." : result.toString();
+        return result.length() == 0
+                ? context.getString(R.string.update_default_notes) : result.toString();
     }
 
-    private static String size(long bytes) {
+    private String size(long bytes) {
         if (bytes <= 0) return "";
         if (bytes >= 1024L * 1024L) {
-            return String.format(Locale.US, "%.1f МБ", bytes / (1024.0 * 1024.0));
+            return context.getString(R.string.size_mb, bytes / (1024.0 * 1024.0));
         }
-        return String.format(Locale.US, "%.0f КБ", bytes / 1024.0);
+        return context.getString(R.string.size_kb, bytes / 1024.0);
     }
 }

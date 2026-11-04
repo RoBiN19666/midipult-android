@@ -1,12 +1,13 @@
 package com.midipult.app;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -39,6 +40,19 @@ public final class UpdateChecker {
         void onProgress(long downloaded, long total);
     }
 
+    /** Отмена текущей загрузки APK. */
+    public static final class Task {
+        private volatile boolean cancelled;
+
+        public void cancel() {
+            cancelled = true;
+        }
+
+        public boolean isCancelled() {
+            return cancelled;
+        }
+    }
+
     public static final class UpdateInfo {
         public final String version;
         public final String name;
@@ -58,10 +72,16 @@ public final class UpdateChecker {
             this.size = size;
             this.digest = digest;
         }
+
+        public boolean hasChecksum() {
+            return shaUrl != null && !shaUrl.trim().isEmpty();
+        }
     }
 
     private static final String API = "https://api.github.com/repos/RoBiN19666/midipult-android/releases?per_page=20";
     private static final String PREFIX = "android-v";
+    /** Служебный код отменённой загрузки (не показывается пользователю). */
+    public static final String CANCELLED = "__cancelled__";
 
     private static final ExecutorService IO = Executors.newCachedThreadPool();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -92,6 +112,7 @@ public final class UpdateChecker {
                 for (int i = 0; i < releases.length(); i++) {
                     JSONObject release = releases.optJSONObject(i);
                     if (release == null) continue;
+                    if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue;
                     String tag = release.optString("tag_name", "");
                     if (!tag.startsWith(PREFIX)) continue;
                     String version = tag.substring(PREFIX.length());
@@ -99,12 +120,14 @@ public final class UpdateChecker {
                     JSONObject asset = findApk(release.optJSONArray("assets"), version);
                     if (asset == null) continue;
                     JSONObject sha = findSha(release.optJSONArray("assets"), version);
+                    // Без .sha256 обновление не предлагаем: проверка целостности обязательна.
+                    if (sha == null) continue;
                     found = new UpdateInfo(
                             version,
                             release.optString("name", tag),
                             release.optString("body", ""),
                             asset.optString("browser_download_url", ""),
-                            sha == null ? "" : sha.optString("browser_download_url", ""),
+                            sha.optString("browser_download_url", ""),
                             asset.optLong("size", 0L),
                             digestOf(asset.optString("digest", ""))
                     );
@@ -112,48 +135,75 @@ public final class UpdateChecker {
                 }
                 StationStore.setLastApkCheck(app, System.currentTimeMillis());
             } catch (Exception exc) {
-                error = exc.getMessage() == null ? exc.toString() : exc.getMessage();
+                error = friendly(app, exc);
             }
             final UpdateInfo result = found;
-            final String message = force ? error : (found == null ? null : error);
+            final String message = force ? error : null;
             MAIN.post(() -> callback.onResult(result, message));
         });
     }
 
     public static void downloadAndInstall(Context context, UpdateInfo info,
-                                          ProgressListener progress, DownloadCallback callback) {
+                                          ProgressListener progress, Task task,
+                                          DownloadCallback callback) {
         final Context app = context.getApplicationContext();
         IO.execute(() -> {
             File target = null;
             String error = null;
+            boolean cancelled = false;
             try {
                 if (info.apkUrl == null || info.apkUrl.trim().isEmpty()) {
-                    throw new RuntimeException("В релизе нет APK");
+                    throw new IllegalStateException("NO_APK");
+                }
+                if (!info.hasChecksum()) {
+                    throw new IllegalStateException("NO_SHA");
                 }
                 File dir = app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                 if (dir == null) dir = app.getCacheDir();
-                if (!dir.exists() && !dir.mkdirs()) throw new RuntimeException("Не могу создать папку загрузки");
-                target = new File(dir, "midipult-android-" + info.version + ".apk");
-                download(info.apkUrl, target, progress);
-                if (info.shaUrl != null && !info.shaUrl.trim().isEmpty()) {
-                    String expected = downloadText(info.shaUrl);
-                    if (!sha256(target).equalsIgnoreCase(expected)) {
-                        target.delete();
-                        throw new RuntimeException("SHA-256 APK не совпал");
-                    }
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw new IllegalStateException("NO_DIR");
                 }
+                target = new File(dir, "midipult-android-" + info.version + ".apk");
+                cleanupOldApks(dir, target);
+                download(info.apkUrl, target, progress, task);
+
+                String expected = downloadText(info.shaUrl);
+                if (expected == null || expected.isEmpty()) {
+                    throw new IllegalStateException("SHA_MISSING");
+                }
+                String actual = sha256(target);
+                if (!actual.equalsIgnoreCase(expected)) {
+                    throw new IllegalStateException("SHA_MISMATCH");
+                }
+                if (info.digest != null && !info.digest.isEmpty()
+                        && !actual.equalsIgnoreCase(info.digest)) {
+                    throw new IllegalStateException("DIGEST_MISMATCH");
+                }
+            } catch (CancelledException exc) {
+                cancelled = true;
+                if (target != null) target.delete();
+                target = null;
             } catch (Exception exc) {
-                error = exc.getMessage() == null ? exc.toString() : exc.getMessage();
+                error = friendly(app, exc);
                 if (target != null) target.delete();
                 target = null;
             }
             final File file = target;
-            final String message = error;
+            final String message = cancelled ? CANCELLED : error;
             MAIN.post(() -> callback.onResult(file, message));
         });
     }
 
     public static boolean install(Context context, File file) {
+        if (file == null || !file.isFile()) {
+            Toast.makeText(context, context.getString(R.string.update_apk_missing),
+                    Toast.LENGTH_LONG).show();
+            return false;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !canInstall(context)) {
+            openInstallSettings(context);
+            return false;
+        }
         try {
             Uri uri = Uri.parse("content://" + context.getPackageName() + ".files/updates/"
                     + Uri.encode(file.getName()));
@@ -163,16 +213,30 @@ public final class UpdateChecker {
             context.startActivity(intent);
             return true;
         } catch (Exception exc) {
-            try {
-                Intent settings = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + context.getPackageName()));
-                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(settings);
-                Toast.makeText(context, "Разрешите установку из этого источника", Toast.LENGTH_LONG).show();
-            } catch (Exception ignored) {
-                Toast.makeText(context, "Не удалось открыть установщик: " + exc.getMessage(), Toast.LENGTH_LONG).show();
-            }
+            openInstallSettings(context);
             return false;
+        }
+    }
+
+    private static boolean canInstall(Context context) {
+        try {
+            return context.getPackageManager().canRequestPackageInstalls();
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private static void openInstallSettings(Context context) {
+        try {
+            Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + context.getPackageName()));
+            settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(settings);
+            Toast.makeText(context, context.getString(R.string.update_allow_install),
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception ignored) {
+            Toast.makeText(context, context.getString(R.string.update_installer_failed),
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -219,33 +283,54 @@ public final class UpdateChecker {
         }
     }
 
-    private static void download(String url, File target, ProgressListener progress) throws Exception {
+    private static void download(String url, File target, ProgressListener progress, Task task)
+            throws Exception {
+        if (task != null && task.isCancelled()) throw new CancelledException();
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(60000);
         connection.setInstanceFollowRedirects(true);
         connection.setRequestProperty("User-Agent", "MidiPult-Android/" + BuildConfig.VERSION_NAME);
-        int code = connection.getResponseCode();
-        if (code != 200) throw new RuntimeException("HTTP " + code);
-        long total = connection.getContentLength();
-        long done = 0;
-        long reported = 0;
-        try (InputStream input = connection.getInputStream();
-             FileOutputStream output = new FileOutputStream(target)) {
-            byte[] buffer = new byte[64 * 1024];
-            int count;
-            while ((count = input.read(buffer)) > 0) {
-                output.write(buffer, 0, count);
-                done += count;
-                if (progress != null && (done - reported >= 32 * 1024 || (total > 0 && done >= total))) {
-                    reported = done;
-                    postProgress(progress, done, total);
+        try {
+            int code = connection.getResponseCode();
+            if (code != 200) throw new RuntimeException("HTTP " + code);
+            long total = connection.getContentLength();
+            long done = 0;
+            long reported = 0;
+            try (InputStream input = connection.getInputStream();
+                 FileOutputStream output = new FileOutputStream(target)) {
+                byte[] buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.read(buffer)) > 0) {
+                    if (task != null && task.isCancelled()) throw new CancelledException();
+                    output.write(buffer, 0, count);
+                    done += count;
+                    if (progress != null && (done - reported >= 32 * 1024
+                            || (total > 0 && done >= total))) {
+                        reported = done;
+                        postProgress(progress, done, total);
+                    }
                 }
             }
+            if (task != null && task.isCancelled()) throw new CancelledException();
+            if (progress != null) postProgress(progress, done, total);
         } finally {
             connection.disconnect();
         }
-        if (progress != null) postProgress(progress, done, total);
+    }
+
+    private static void cleanupOldApks(File dir, File keep) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (keep != null && file.equals(keep)) continue;
+            String name = file.getName();
+            if (name.startsWith("midipult-android-")
+                    && (name.endsWith(".apk") || name.endsWith(".apk.sha256"))) {
+                // Старые версии и недокачанные файлы больше не нужны.
+                file.delete();
+            }
+        }
     }
 
     private static void postProgress(final ProgressListener progress, final long done, final long total) {
@@ -267,7 +352,8 @@ public final class UpdateChecker {
         String text = read(connection);
         int index = text.indexOf('\n');
         if (index >= 0) text = text.substring(0, index);
-        return text.trim().split("\\s+")[0].toLowerCase(Locale.US);
+        String token = text.trim().split("\\s+")[0];
+        return token == null ? "" : token.toLowerCase(Locale.US);
     }
 
     private static String sha256(File file) throws Exception {
@@ -282,15 +368,69 @@ public final class UpdateChecker {
         return result.toString();
     }
 
+    private static int[] semver(String version) {
+        String value = version == null ? "" : version.trim();
+        int dash = value.indexOf('-');
+        if (dash >= 0) value = value.substring(0, dash);
+        int plus = value.indexOf('+');
+        if (plus >= 0) value = value.substring(0, plus);
+        String[] parts = value.split("\\.");
+        int[] numbers = new int[3];
+        for (int i = 0; i < 3 && i < parts.length; i++) {
+            String digits = parts[i].replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) break;
+            try {
+                numbers[i] = Integer.parseInt(digits);
+            } catch (NumberFormatException ignored) {
+                break;
+            }
+        }
+        return numbers;
+    }
+
     private static boolean isNewer(String candidate, String current) {
-        String[] left = candidate.replaceAll("[^0-9.]", "").split("\\.");
-        String[] right = current.replaceAll("[^0-9.]", "").split("\\.");
-        int size = Math.max(left.length, right.length);
-        for (int i = 0; i < size; i++) {
-            int a = i < left.length && !left[i].isEmpty() ? Integer.parseInt(left[i]) : 0;
-            int b = i < right.length && !right[i].isEmpty() ? Integer.parseInt(right[i]) : 0;
-            if (a != b) return a > b;
+        int[] left = semver(candidate);
+        int[] right = semver(current);
+        for (int i = 0; i < 3; i++) {
+            if (left[i] != right[i]) return left[i] > right[i];
         }
         return false;
+    }
+
+    private static String friendly(Context context, Exception exc) {
+        String raw = exc.getMessage() == null ? "" : exc.getMessage().trim();
+        String lower = raw.toLowerCase(Locale.US);
+        if ("NO_APK".equals(raw)) return context.getString(R.string.update_error_no_apk);
+        if ("NO_SHA".equals(raw)) return context.getString(R.string.update_error_no_sha);
+        if ("NO_DIR".equals(raw)) return context.getString(R.string.update_error_no_dir);
+        if ("SHA_MISSING".equals(raw)) return context.getString(R.string.update_error_sha_missing);
+        if ("SHA_MISMATCH".equals(raw)) return context.getString(R.string.update_error_sha_mismatch);
+        if ("DIGEST_MISMATCH".equals(raw)) {
+            return context.getString(R.string.update_error_digest_mismatch);
+        }
+        if (lower.contains("unable to resolve host") || lower.contains("unknownhost")
+                || lower.contains("nodename nor servname")) {
+            return context.getString(R.string.network_no_internet);
+        }
+        if (lower.contains("timed out") || lower.contains("timeout")) {
+            return context.getString(R.string.network_timeout);
+        }
+        if (lower.contains("connection refused") || lower.contains("econnrefused")) {
+            return context.getString(R.string.network_connection_refused);
+        }
+        if (lower.contains("network is unreachable") || lower.contains("no route to host")) {
+            return context.getString(R.string.network_address_unreachable);
+        }
+        if (lower.startsWith("github http ")) {
+            return context.getString(R.string.network_github_code,
+                    raw.substring("GitHub HTTP ".length()));
+        }
+        if (lower.startsWith("http ")) {
+            return context.getString(R.string.network_server_code, raw.substring("HTTP ".length()));
+        }
+        return context.getString(R.string.update_error_generic);
+    }
+
+    private static final class CancelledException extends Exception {
     }
 }

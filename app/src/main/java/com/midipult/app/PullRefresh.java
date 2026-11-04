@@ -87,10 +87,6 @@ final class PullRefresh extends FrameLayout {
         this.listener = listener;
     }
 
-    boolean isRefreshing() {
-        return refreshing;
-    }
-
     void finishRefresh() {
         handler.removeCallbacks(timeout);
         if (!refreshing) return;

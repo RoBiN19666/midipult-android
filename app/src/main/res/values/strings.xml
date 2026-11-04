@@ -1,3 +1,133 @@
 <resources>
     <string name="app_name">MidiPult</string>
+
+    <!-- Нижняя навигация -->
+    <string name="nav_panel">Панель</string>
+    <string name="nav_columns">Колонки</string>
+    <string name="nav_menu">Меню</string>
+
+    <!-- Общие действия -->
+    <string name="action_retry">Повторить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_open">Открыть</string>
+    <string name="action_scan">Сканировать</string>
+    <string name="action_add_column">Добавить колонку</string>
+    <string name="action_connect">Подключить</string>
+
+    <!-- Панель: заглушки и ошибки -->
+    <string name="error_panel_unavailable">Панель недоступна</string>
+    <string name="error_panel_http_title">Панель ответила ошибкой</string>
+    <string name="error_panel_http_message">Колонка вернула код %1$d%2$s. Попробуйте ещё раз или выберите другую колонку.</string>
+    <string name="error_renderer_title">Панель перезапускается</string>
+    <string name="error_renderer_message">Система остановила процесс отображения панели. Нажмите «Повторить», чтобы открыть её заново.</string>
+    <string name="error_column_not_found_title">Колонка не найдена</string>
+    <string name="error_column_not_found_message">Не удалось найти «%1$s» в сети. Проверьте, что колонка включена и подключена к этой же Wi-Fi сети.</string>
+    <string name="error_panel_timeout_title">Панель не отвечает</string>
+    <string name="error_panel_timeout_message">Колонка не ответила вовремя. Проверьте Wi-Fi и попробуйте ещё раз.</string>
+    <string name="error_connect_message">Не удалось подключиться к «%1$s». Проверьте питание колонки и адрес панели.</string>
+    <string name="error_panel_timeout_seconds_message">Колонка не ответила за %1$d секунд. Проверьте, что колонка включена и в той же Wi-Fi сети.</string>
+    <string name="network_connection_refused">Соединение отклонено</string>
+    <string name="network_name_not_found">Имя не найдено</string>
+    <string name="network_timeout">Превышено время ожидания</string>
+    <string name="network_connection_reset">Соединение прервано</string>
+    <string name="network_address_unreachable">Адрес недоступен</string>
+    <string name="network_no_internet">Нет подключения к сети</string>
+    <string name="network_ssl_error">Ошибка защищённого соединения</string>
+
+    <!-- Файлы и скачивание -->
+    <string name="file_chooser_title">Выберите файл</string>
+    <string name="download_started">Скачивание: %1$s</string>
+    <string name="download_start_failed">Не удалось начать скачивание</string>
+
+    <!-- Переименование -->
+    <string name="rename_title">Название колонки</string>
+    <string name="rename_subtitle">Так колонка будет видна в списке и в меню</string>
+    <string name="rename_hint">Например, «Кухня»</string>
+    <string name="rename_saved">Название сохранено</string>
+
+    <!-- Экран «Колонки» -->
+    <string name="setup_subtitle">Колонки и подключение</string>
+    <string name="setup_status_saved">Сохранено колонок: %1$d. Можно сканировать или добавить колонку по IP.</string>
+    <string name="setup_scanning">Ищу колонки в сети…</string>
+    <string name="setup_scanning_button">Сканирую…</string>
+    <string name="setup_hint">Колонка и телефон должны быть в одной Wi-Fi сети.\nКолонку можно переименовать кнопкой ✎ или удалить кнопкой ✕.</string>
+    <string name="setup_select_first">Сначала выберите колонку</string>
+    <string name="setup_no_active">Нет активной колонки</string>
+    <string name="setup_scan_error">Ошибка поиска: %1$s</string>
+    <string name="setup_not_found">Колонки не найдены. Проверьте Wi-Fi или добавьте колонку по IP.</string>
+    <string name="setup_found">Найдено: %1$d. Выберите колонку.</string>
+    <string name="setup_empty">Пока нет колонок.\nНажмите «Сканировать» — приложение найдёт панель в этой Wi-Fi сети.</string>
+    <string name="setup_version">панель v%1$s</string>
+    <string name="setup_cd_rename">Переименовать колонку</string>
+    <string name="setup_cd_delete">Удалить колонку</string>
+    <string name="delete_title">Удалить колонку?</string>
+    <string name="delete_message_active">Это активная колонка. После удаления приложение вернётся к выбору колонки.</string>
+    <string name="delete_message">Колонка исчезнет из списка.</string>
+    <string name="delete_done">Колонка удалена</string>
+    <string name="setup_not_found_scan">Колонки не найдены. Нажмите «Сканировать» или добавьте колонку по IP.</string>
+    <string name="setup_count">Колонок в списке: %1$d.</string>
+    <string name="add_title">Добавить колонку</string>
+    <string name="add_subtitle">IP колонки и порт панели (обычно 8055)</string>
+    <string name="probe_title">Проверяю панель</string>
+    <string name="probe_not_panel">Это не панель MidiPult</string>
+    <string name="probe_error">Не удалось подключиться: %1$s</string>
+    <string name="column_fallback">Колонка %1$s</string>
+    <string name="probe_http_code">Колонка ответила кодом %1$s</string>
+    <string name="probe_timeout">Колонка не ответила вовремя</string>
+    <string name="probe_refused">Колонка отклонила подключение</string>
+    <string name="probe_host">Не удалось найти адрес колонки</string>
+    <string name="probe_unreachable">Адрес недоступен</string>
+    <string name="probe_failed">Не удалось подключиться к колонке</string>
+
+    <!-- Меню -->
+    <string name="menu_subtitle">Управление колонками</string>
+    <string name="menu_columns">Колонки и подключение</string>
+    <string name="menu_columns_desc">Добавить, переименовать или удалить</string>
+    <string name="menu_rename">Переименовать колонку</string>
+    <string name="menu_update">Проверить обновление</string>
+    <string name="menu_update_desc">Текущая версия %1$s</string>
+    <string name="menu_browser">Открыть в браузере</string>
+
+    <!-- Обновление APK -->
+    <string name="update_title">Обновление MidiPult</string>
+    <string name="update_checking">Проверяю обновление…</string>
+    <string name="update_checking_hint">Смотрю новые версии на GitHub…</string>
+    <string name="update_up_to_date">Обновлений нет</string>
+    <string name="update_latest">Установлена последняя версия — %1$s.</string>
+    <string name="update_auto_hint">Новые версии проверяются автоматически раз в сутки.</string>
+    <string name="update_check_failed">Не удалось проверить обновление</string>
+    <string name="update_check_failed_hint">Проверьте подключение к интернету и попробуйте ещё раз.</string>
+    <string name="update_available">Доступна версия %1$s</string>
+    <string name="update_size">Размер %1$s</string>
+    <string name="update_download_install">Скачать и установить</string>
+    <string name="update_later">Позже</string>
+    <string name="update_downloading">Скачиваю версию %1$s</string>
+    <string name="update_percent">%1$d%% · %2$s из %3$s</string>
+    <string name="update_downloaded">Скачано %1$s</string>
+    <string name="update_download_failed">Загрузка не удалась</string>
+    <string name="update_download_failed_message">Не удалось скачать обновление.</string>
+    <string name="update_ready">Готово к установке</string>
+    <string name="update_ready_verified">APK скачан и проверен по SHA-256.</string>
+    <string name="update_ready_unverified">APK скачан.</string>
+    <string name="update_installer_hint">Откроется системный установщик — подтвердите установку.</string>
+    <string name="update_install">Установить</string>
+    <string name="update_default_notes">Доступна новая версия приложения.</string>
+    <string name="size_mb">%1$.1f МБ</string>
+    <string name="size_kb">%1$.0f КБ</string>
+
+    <string name="update_error_no_apk">В релизе нет APK</string>
+    <string name="update_error_no_sha">В релизе нет SHA-256</string>
+    <string name="update_error_no_dir">Не могу создать папку загрузки</string>
+    <string name="update_error_sha_missing">Не удалось получить SHA-256</string>
+    <string name="update_error_sha_mismatch">SHA-256 APK не совпал</string>
+    <string name="update_error_digest_mismatch">SHA-256 не совпал с данными GitHub</string>
+    <string name="update_error_generic">Ошибка загрузки обновления</string>
+    <string name="update_apk_missing">APK не найден, попробуйте скачать обновление ещё раз</string>
+    <string name="update_allow_install">Разрешите установку приложений из этого источника</string>
+    <string name="update_installer_failed">Не удалось открыть установщик</string>
+    <string name="network_github_code">GitHub вернул код %1$s</string>
+    <string name="network_server_code">Сервер вернул код %1$s</string>
 </resources>

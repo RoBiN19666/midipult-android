@@ -1,0 +1,14 @@
+# Нормализуем переводы строк в репозитории.
+* text=auto
+*.java text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.properties text eol=lf
+*.gitattributes text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.apk binary

@@ -21,6 +21,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 /** Общая визуальная тема приложения в стиле панели MidiPult. */
@@ -33,7 +34,6 @@ final class Ui {
     static final int TEXT = 0xFFF1F4FF;
     static final int MUTED = 0xFF8C97B2;
     static final int ACCENT = 0xFF7C5CFF;
-    static final int CYAN = 0xFF22D3EE;
     static final int DANGER = 0xFFFF5C7A;
 
     private Ui() {
@@ -47,7 +47,9 @@ final class Ui {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
         drawable.setCornerRadius(radius);
-        if (strokeWidth > 0) drawable.setStroke(1, stroke);
+        if (strokeWidth > 0) {
+            drawable.setStroke(Math.max(1, Math.round(strokeWidth)), stroke);
+        }
         return drawable;
     }
 
@@ -177,28 +179,6 @@ final class Ui {
         return edit;
     }
 
-    static void applyInsets(Activity activity, View root, int horizontalDp) {
-        Window window = activity.getWindow();
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.setDecorFitsSystemWindows(false);
-            window.setStatusBarColor(Color.TRANSPARENT);
-            window.setNavigationBarColor(Color.TRANSPARENT);
-            final int side = dp(activity, horizontalDp);
-            root.setOnApplyWindowInsetsListener((view, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                view.setPadding(side, side + bars.top, side, dp(activity, 14) + bars.bottom);
-                return insets;
-            });
-        } else {
-            window.setStatusBarColor(BG);
-            window.setNavigationBarColor(BG);
-            root.setPadding(dp(activity, horizontalDp), dp(activity, 18),
-                    dp(activity, horizontalDp), dp(activity, 14));
-            root.setFitsSystemWindows(true);
-        }
-        root.setBackground(background());
-    }
-
     /**
      * Полноэкранный режим для WebView: контент занимает всю ширину и низ,
      * сверху остаётся только место под статус-бар, снизу — навигационная панель.
@@ -222,17 +202,103 @@ final class Ui {
         }
     }
 
+    /**
+     * Экран с нижней навигацией: контент получает боковые отступы и учитывает
+     * статус-бар, панель навигации — системный низ.
+     */
+    static void screenInsets(Activity activity, View root, final View content, final View bar,
+                             final int sideDp, final int topDp, final int bottomDp) {
+        Window window = activity.getWindow();
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false);
+            window.setStatusBarColor(Color.TRANSPARENT);
+            window.setNavigationBarColor(Color.TRANSPARENT);
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                int side = dp(activity, sideDp);
+                content.setPadding(side, dp(activity, topDp) + bars.top,
+                        side, dp(activity, bottomDp));
+                bar.setPadding(bar.getPaddingLeft(), bar.getPaddingTop(),
+                        bar.getPaddingRight(), bars.bottom);
+                return insets;
+            });
+        } else {
+            window.setStatusBarColor(BG);
+            window.setNavigationBarColor(BG);
+            int side = dp(activity, sideDp);
+            content.setPadding(side, dp(activity, topDp), side, dp(activity, bottomDp));
+        }
+        root.setBackground(background());
+    }
+
+    /** Нижняя навигация приложения: «Панель · Колонки · Меню». */
+    interface Nav {
+        void onItem(int index);
+    }
+
+    static LinearLayout navBar(Context context, int activeIndex, final Nav nav) {
+        LinearLayout column = new LinearLayout(context);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setBackgroundColor(0xFF0C1120);
+
+        View line = new View(context);
+        line.setBackgroundColor(STROKE);
+        column.addView(line, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(context, 1))));
+
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        String[] icons = {"▣", "☰", "⋯"};
+        String[] labels = {context.getString(R.string.nav_panel),
+                context.getString(R.string.nav_columns),
+                context.getString(R.string.nav_menu)};
+        for (int i = 0; i < icons.length; i++) {
+            row.addView(navItem(context, icons[i], labels[i], i == activeIndex, i, nav),
+                    new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        }
+        row.setMinimumHeight(dp(context, 58));
+        column.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return column;
+    }
+
+    private static View navItem(Context context, String icon, String label, boolean active,
+                                final int index, final Nav nav) {
+        LinearLayout item = new LinearLayout(context);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        int color = active ? ACCENT : MUTED;
+
+        TextView glyph = new TextView(context);
+        glyph.setText(icon);
+        glyph.setTextSize(17);
+        glyph.setTextColor(color);
+        glyph.setGravity(Gravity.CENTER);
+
+        TextView text = new TextView(context);
+        text.setText(label);
+        text.setTextSize(11);
+        text.setTextColor(color);
+        text.setGravity(Gravity.CENTER);
+        text.setPadding(0, dp(context, 3), 0, 0);
+
+        item.addView(glyph);
+        item.addView(text);
+        if (!active) {
+            item.setOnClickListener(v -> {
+                if (nav != null) nav.onItem(index);
+            });
+            Drawable ripple = selectable(context);
+            if (ripple != null) item.setBackground(ripple);
+        }
+        return item;
+    }
+
     static LinearLayout.LayoutParams lp(int width, int height, int topMarginDp, Context context) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
         if (topMarginDp != 0) params.topMargin = dp(context, topMarginDp);
         return params;
-    }
-
-    static View spacer(Context context, int heightDp) {
-        View view = new View(context);
-        view.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(context, heightDp)));
-        return view;
     }
 
     /** Нижняя карточка вместо стандартных системных диалогов. */
@@ -271,7 +337,13 @@ final class Ui {
             body = new LinearLayout(context);
             body.setOrientation(LinearLayout.VERTICAL);
             body.setPadding(0, dp(context, 12), 0, 0);
-            card.addView(body);
+            MaxHeightScrollView bodyScroll = new MaxHeightScrollView(context,
+                    Math.max(dp(context, 120),
+                            (int) (context.getResources().getDisplayMetrics().heightPixels * 0.5f)));
+            bodyScroll.addView(body, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            card.addView(bodyScroll, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
             buttons = new LinearLayout(context);
             buttons.setOrientation(LinearLayout.HORIZONTAL);
@@ -368,8 +440,9 @@ final class Ui {
         }
 
         private void place(Button button) {
+            button.setMinHeight(dp(context, 46));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    0, dp(context, 46), 1f);
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             params.setMargins(dp(context, 4), 0, dp(context, 4), 0);
             buttons.addView(button, params);
         }
@@ -387,6 +460,25 @@ final class Ui {
             try {
                 dialog.dismiss();
             } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private static final class MaxHeightScrollView extends ScrollView {
+        private final int maxHeight;
+
+        MaxHeightScrollView(Context context, int maxHeight) {
+            super(context);
+            this.maxHeight = maxHeight;
+            setFillViewport(false);
+            setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            if (getMeasuredHeight() > maxHeight) {
+                setMeasuredDimension(getMeasuredWidth(), maxHeight);
             }
         }
     }

@@ -14,8 +14,6 @@ import java.io.FileNotFoundException;
 
 /** Минимальный content:// provider для передачи скачанного APK установщику. */
 public class ApkProvider extends ContentProvider {
-    private static final String AUTHORITY_SUFFIX = ".files";
-
     @Override
     public boolean onCreate() {
         return true;

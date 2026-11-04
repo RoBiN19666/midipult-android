@@ -11,10 +11,14 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.ActionMode;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.MimeTypeMap;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -29,10 +33,52 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.net.URLDecoder;
+import java.util.Locale;
+
 /** Основной экран: полноэкранная панель, нижняя навигация и меню приложения. */
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER = 77;
     private static final long LOAD_TIMEOUT_MS = 25000L;
+
+    /**
+     * Запрещает выделение текста и контекстное меню по долгому нажатию вне полей ввода.
+     * В input/textarea/contenteditable выделение и меню Copy/Paste остаются как обычно.
+     */
+    private static final String SELECTION_GUARD_JS =
+            "(function(){"
+                    + "if(window.__midipultSelectionGuard)return;"
+                    + "window.__midipultSelectionGuard=true;"
+                    + "var css='html,body,*{-webkit-user-select:none !important;-webkit-touch-callout:none !important;}'"
+                    + "+'input,textarea,[contenteditable]:not([contenteditable=\"false\"]),"
+                    + "[contenteditable]:not([contenteditable=\"false\"]) *{"
+                    + "-webkit-user-select:text !important;-webkit-touch-callout:default !important;}';"
+                    + "var style=document.createElement('style');"
+                    + "style.type='text/css';"
+                    + "style.appendChild(document.createTextNode(css));"
+                    + "(document.head||document.documentElement).appendChild(style);"
+                    + "function isEditable(node){"
+                    + "while(node&&node.nodeType!==1)node=node.parentNode;"
+                    + "if(!node||!node.closest)return false;"
+                    + "var hit=node.closest('input,textarea,[contenteditable]');"
+                    + "if(!hit)return false;"
+                    + "var tag=hit.tagName?hit.tagName.toUpperCase():'';"
+                    + "if(tag==='INPUT'){var type=(hit.getAttribute('type')||'text').toLowerCase();"
+                    + "return ['checkbox','radio','button','submit','reset','range','color','file','image']"
+                    + ".indexOf(type)<0;}"
+                    + "if(tag==='TEXTAREA')return true;"
+                    + "var ce=hit.getAttribute('contenteditable');"
+                    + "return ce!==null&&ce.toLowerCase()!=='false';"
+                    + "}"
+                    + "function report(v){try{if(window.MidiPultSelection)window.MidiPultSelection.setEditable(!!v);}catch(e){}}"
+                    + "document.addEventListener('touchstart',function(e){report(isEditable(e.target));},true);"
+                    + "document.addEventListener('mousedown',function(e){report(isEditable(e.target));},true);"
+                    + "document.addEventListener('focusin',function(e){report(isEditable(e.target));},true);"
+                    + "document.addEventListener('selectstart',function(e){"
+                    + "if(!isEditable(e.target))e.preventDefault();},true);"
+                    + "document.addEventListener('contextmenu',function(e){"
+                    + "if(!isEditable(e.target))e.preventDefault();},true);"
+                    + "})();";
 
     private FrameLayout content;
     private PullRefresh pull;
@@ -48,6 +94,8 @@ public class MainActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Runnable loadTimeout = this::onLoadTimeout;
     private boolean errorShown;
+    /** Процесс-рендерер WebView упал: WebView больше нельзя использовать, нужен recreate. */
+    private boolean rendererGone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,7 +113,7 @@ public class MainActivity extends Activity {
         bottomNav.post(() -> UpdateChecker.autoCheck(this, (info, error) -> {
             if (isFinishing() || isDestroyed()) return;
             if (info == null) return;
-            showUpdateAvailable(new UpdateSheet(this, navHeight()), info);
+            UpdateFlow.showAvailable(this, navHeight(), info);
         }));
     }
 
@@ -101,7 +149,7 @@ public class MainActivity extends Activity {
         root.addView(content, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        bottomNav = buildNav();
+        bottomNav = Ui.navBar(this, 0, this::onNavItem);
         root.addView(bottomNav, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return root;
@@ -132,7 +180,7 @@ public class MainActivity extends Activity {
         badgeParams.gravity = Gravity.CENTER_HORIZONTAL;
         box.addView(badge, badgeParams);
 
-        errorTitle = Ui.title(this, "Панель недоступна", 21);
+        errorTitle = Ui.title(this, getString(R.string.error_panel_unavailable), 21);
         errorTitle.setGravity(Gravity.CENTER);
         errorTitle.setPadding(0, Ui.dp(this, 18), 0, 0);
         box.addView(errorTitle);
@@ -149,8 +197,13 @@ public class MainActivity extends Activity {
         errorDetails.setPadding(0, Ui.dp(this, 12), 0, 0);
         box.addView(errorDetails);
 
-        Button retry = Ui.primary(this, "Повторить");
+        Button retry = Ui.primary(this, getString(R.string.action_retry));
         retry.setOnClickListener(v -> {
+            if (rendererGone) {
+                // WebView после падения рендерера пересоздаётся только вместе с Activity.
+                recreate();
+                return;
+            }
             hideError();
             load(station);
         });
@@ -160,7 +213,7 @@ public class MainActivity extends Activity {
         retryParams.topMargin = Ui.dp(this, 24);
         box.addView(retry, retryParams);
 
-        Button stations = Ui.ghost(this, "Станции");
+        Button stations = Ui.ghost(this, getString(R.string.nav_columns));
         stations.setOnClickListener(v -> openStations());
         LinearLayout.LayoutParams stationsParams = new LinearLayout.LayoutParams(
                 Ui.dp(this, 214), Ui.dp(this, 46));
@@ -170,58 +223,12 @@ public class MainActivity extends Activity {
         return box;
     }
 
-    private LinearLayout buildNav() {
-        LinearLayout column = new LinearLayout(this);
-        column.setOrientation(LinearLayout.VERTICAL);
-        column.setBackgroundColor(0xFF0C1120);
-
-        View line = new View(this);
-        line.setBackgroundColor(Ui.STROKE);
-        column.addView(line, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, Ui.dp(this, 1))));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(navItem("▣", "Панель", true, null), weight());
-        row.addView(navItem("☰", "Станции", false, v -> openStations()), weight());
-        row.addView(navItem("⋯", "Меню", false, v -> showMenu()), weight());
-        column.addView(row, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 58)));
-        return column;
-    }
-
-    private LinearLayout.LayoutParams weight() {
-        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-    }
-
-    private View navItem(String icon, String label, boolean active, View.OnClickListener click) {
-        LinearLayout item = new LinearLayout(this);
-        item.setOrientation(LinearLayout.VERTICAL);
-        item.setGravity(Gravity.CENTER);
-        int color = active ? Ui.ACCENT : Ui.MUTED;
-
-        TextView glyph = new TextView(this);
-        glyph.setText(icon);
-        glyph.setTextSize(17);
-        glyph.setTextColor(color);
-        glyph.setGravity(Gravity.CENTER);
-
-        TextView text = new TextView(this);
-        text.setText(label);
-        text.setTextSize(11);
-        text.setTextColor(color);
-        text.setGravity(Gravity.CENTER);
-        text.setPadding(0, Ui.dp(this, 3), 0, 0);
-
-        item.addView(glyph);
-        item.addView(text);
-        if (click != null) {
-            item.setOnClickListener(click);
-            android.graphics.drawable.Drawable ripple = Ui.selectable(this);
-            if (ripple != null) item.setBackground(ripple);
+    private void onNavItem(int index) {
+        if (index == 1) {
+            openStations();
+        } else if (index == 2) {
+            showMenu();
         }
-        return item;
     }
 
     private void setupWebView() {
@@ -230,13 +237,17 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(false);
+        // content:// нужен WebView для файлов, выбранных через file chooser.
         settings.setAllowContentAccess(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
         settings.setUserAgentString(settings.getUserAgentString() + " MidiPultAndroid/" + BuildConfig.VERSION_NAME);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        webView.addJavascriptInterface(new SelectionBridge((PageWebView) webView), "MidiPultSelection");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -260,6 +271,9 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
                 if (pull != null) pull.finishRefresh();
+                if (!errorShown && !isInternalUrl(url)) {
+                    view.evaluateJavascript(SELECTION_GUARD_JS, null);
+                }
                 if (errorShown) return;
                 cancelLoadTimeout();
             }
@@ -291,13 +305,24 @@ public class MainActivity extends Activity {
                 String url = request.getUrl() == null ? "" : request.getUrl().toString();
                 if (isInternalUrl(url)) return;
                 int status = response == null ? 0 : response.getStatusCode();
-                if (status < 400) return;
+                // 401/403/407 обычно означают страницу входа/авторизации панели:
+                // её нужно показать, а не закрывать заглушкой.
+                if (status < 400 || status == 401 || status == 403 || status == 407) return;
                 String reason = response == null ? "" : response.getReasonPhrase();
-                showError("Панель ответила ошибкой",
-                        "Станция вернула код " + status
-                                + (reason == null || reason.isEmpty() ? "" : " (" + reason + ")")
-                                + ". Попробуйте ещё раз или выберите другую станцию.",
+                showError(getString(R.string.error_panel_http_title),
+                        getString(R.string.error_panel_http_message, status,
+                                reason == null || reason.isEmpty() ? "" : " (" + reason + ")"),
                         url);
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                // Возвращаем true: иначе система убьёт приложение вместе с рендерером.
+                rendererGone = true;
+                showError(getString(R.string.error_renderer_title),
+                        getString(R.string.error_renderer_message),
+                        station == null ? "" : station.url);
+                return true;
             }
         });
 
@@ -307,11 +332,22 @@ public class MainActivity extends Activity {
                                              FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("*/*");
+                Intent intent = null;
                 try {
-                    startActivityForResult(Intent.createChooser(intent, "Выберите файл"), FILE_CHOOSER);
+                    intent = params == null ? null : params.createIntent();
+                } catch (Exception ignored) {
+                }
+                if (intent == null) {
+                    intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("*/*");
+                }
+                if (params != null && params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                }
+                try {
+                    startActivityForResult(Intent.createChooser(intent,
+                            getString(R.string.file_chooser_title)), FILE_CHOOSER);
                     return true;
                 } catch (Exception exc) {
                     fileCallback = null;
@@ -322,6 +358,7 @@ public class MainActivity extends Activity {
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             try {
+                String fileName = downloadFileName(contentDisposition, mimeType, url);
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
                 request.setMimeType(mimeType);
                 request.addRequestHeader("User-Agent", userAgent);
@@ -329,16 +366,121 @@ public class MainActivity extends Activity {
                 if (cookie != null) request.addRequestHeader("Cookie", cookie);
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                 request.setDestinationInExternalFilesDir(MainActivity.this,
-                        Environment.DIRECTORY_DOWNLOADS, "midipult-" + System.currentTimeMillis());
+                        Environment.DIRECTORY_DOWNLOADS, fileName);
                 DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
                 if (manager != null) {
                     manager.enqueue(request);
-                    Toast.makeText(this, "Скачивание началось", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.download_started, fileName),
+                            Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception exc) {
-                Toast.makeText(this, "Скачивание: " + exc.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.download_start_failed),
+                        Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    /** Имя файла из Content-Disposition (включая filename*), иначе из URL + расширение по mime. */
+    private static String downloadFileName(String contentDisposition, String mimeType, String url) {
+        String name = null;
+        if (contentDisposition != null) {
+            String lower = contentDisposition.toLowerCase(Locale.US);
+            int star = lower.indexOf("filename*=");
+            if (star >= 0) {
+                name = dispositionValue(contentDisposition, star + "filename*=".length());
+                int encoded = name == null ? -1 : name.indexOf("''");
+                if (encoded >= 0) name = name.substring(encoded + 2);
+                name = decode(name);
+            }
+            if (name == null || name.trim().isEmpty()) {
+                int plain = lower.indexOf("filename=");
+                if (plain >= 0) {
+                    name = decode(dispositionValue(contentDisposition, plain + "filename=".length()));
+                }
+            }
+        }
+        if (name == null || name.trim().isEmpty()) {
+            String last = Uri.parse(url == null ? "" : url).getLastPathSegment();
+            name = decode(last);
+        }
+        name = sanitizeFileName(name);
+        if (name.isEmpty()) name = "midipult-" + System.currentTimeMillis();
+        if (!hasExtension(name) && mimeType != null) {
+            String extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType);
+            if (extension != null && !extension.isEmpty()) name = name + "." + extension;
+        }
+        return name;
+    }
+
+    private static String dispositionValue(String header, int from) {
+        String value = header.substring(from).trim();
+        int semicolon = value.indexOf(';');
+        if (semicolon >= 0) value = value.substring(0, semicolon);
+        value = value.trim();
+        if (value.startsWith("\"") && value.endsWith("\"") && value.length() > 1) {
+            value = value.substring(1, value.length() - 1);
+        }
+        return value;
+    }
+
+    private static String decode(String value) {
+        if (value == null) return "";
+        try {
+            return URLDecoder.decode(value, "UTF-8");
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
+    private static String sanitizeFileName(String value) {
+        if (value == null) return "";
+        String name = value.replace('\\', '/');
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) name = name.substring(slash + 1);
+        name = name.replaceAll("[\\p{Cntrl}]", "").trim();
+        if (name.equals(".") || name.equals("..")) name = "";
+        if (name.length() > 96) {
+            int dot = name.lastIndexOf('.');
+            String extension = dot > 0 && name.length() - dot <= 10 ? name.substring(dot) : "";
+            name = name.substring(0, Math.max(1, 96 - extension.length())) + extension;
+        }
+        return name;
+    }
+
+    private static boolean hasExtension(String name) {
+        int dot = name.lastIndexOf('.');
+        return dot > 0 && dot < name.length() - 1 && name.length() - dot <= 10
+                && name.substring(dot + 1).matches("[A-Za-z0-9]+");
+    }
+
+    /** Человеческое описание сетевой ошибки вместо net::ERR_... */
+    private String friendlyNetworkDescription(String description) {
+        if (description == null) return "";
+        String value = description.trim();
+        String lower = value.toLowerCase(Locale.US);
+        if (lower.contains("err_connection_refused") || lower.contains("connection refused")) {
+            return getString(R.string.network_connection_refused);
+        }
+        if (lower.contains("err_name_not_resolved") || lower.contains("err_host_lookup")) {
+            return getString(R.string.network_name_not_found);
+        }
+        if (lower.contains("err_timed_out") || lower.contains("timed out")) {
+            return getString(R.string.network_timeout);
+        }
+        if (lower.contains("err_connection_reset") || lower.contains("err_connection_closed")) {
+            return getString(R.string.network_connection_reset);
+        }
+        if (lower.contains("err_address_unreachable") || lower.contains("err_network_changed")) {
+            return getString(R.string.network_address_unreachable);
+        }
+        if (lower.contains("err_internet_disconnected")) {
+            return getString(R.string.network_no_internet);
+        }
+        if (lower.contains("err_ssl") || lower.contains("certificate")) {
+            return getString(R.string.network_ssl_error);
+        }
+        if (lower.startsWith("net::")) return "";
+        return value;
     }
 
     private static boolean isInternalUrl(String url) {
@@ -351,20 +493,21 @@ public class MainActivity extends Activity {
         String title;
         String message;
         if (code == WebViewClient.ERROR_HOST_LOOKUP) {
-            title = "Станция не найдена";
-            message = "Не удалось найти «" + host + "» в сети. Проверьте, что колонка включена и подключена к этой же Wi-Fi сети.";
+            title = getString(R.string.error_column_not_found_title);
+            message = getString(R.string.error_column_not_found_message, host);
         } else if (code == WebViewClient.ERROR_TIMEOUT) {
-            title = "Панель не отвечает";
-            message = "Станция не ответила вовремя. Проверьте Wi-Fi и попробуйте ещё раз.";
+            title = getString(R.string.error_panel_timeout_title);
+            message = getString(R.string.error_panel_timeout_message);
         } else {
-            title = "Панель недоступна";
-            message = "Не удалось подключиться к «" + host + "». Проверьте питание колонки и адрес станции.";
+            title = getString(R.string.error_panel_unavailable);
+            message = getString(R.string.error_connect_message, host);
         }
         StringBuilder details = new StringBuilder();
         if (url != null && !url.isEmpty()) details.append(url);
-        if (description != null && !description.isEmpty()) {
+        String readable = friendlyNetworkDescription(description);
+        if (!readable.isEmpty()) {
             if (details.length() > 0) details.append(" · ");
-            details.append(description);
+            details.append(readable);
         }
         showError(title, message, details.toString());
     }
@@ -372,9 +515,8 @@ public class MainActivity extends Activity {
     private void onLoadTimeout() {
         if (isFinishing() || isDestroyed() || errorShown) return;
         if (webView != null) webView.stopLoading();
-        showError("Панель не отвечает",
-                "Станция не ответила за " + (LOAD_TIMEOUT_MS / 1000)
-                        + " секунд. Проверьте, что колонка включена и в той же Wi-Fi сети.",
+        showError(getString(R.string.error_panel_timeout_title),
+                getString(R.string.error_panel_timeout_seconds_message, LOAD_TIMEOUT_MS / 1000),
                 station == null ? "" : station.url);
     }
 
@@ -428,6 +570,10 @@ public class MainActivity extends Activity {
     }
 
     private void load(Station target) {
+        if (rendererGone) {
+            recreate();
+            return;
+        }
         station = target;
         hideError();
         webView.loadUrl(target.url);
@@ -436,6 +582,10 @@ public class MainActivity extends Activity {
 
     private void reload() {
         if (webView == null) return;
+        if (rendererGone) {
+            recreate();
+            return;
+        }
         hideError();
         String current = webView.getUrl();
         if (current == null && station != null) {
@@ -459,26 +609,11 @@ public class MainActivity extends Activity {
         String stationLabel = station == null ? ""
                 : (station.name == null || station.name.isEmpty() ? station.ip : station.name);
         String stationUrl = station == null ? "" : station.url;
-        final Ui.Sheet sheet = new Ui.Sheet(this, "MidiPult", "Управление станцией", navHeight());
-        sheet.row("Станции и подключение", "Добавить, переименовать или удалить",
-                v -> {
-                    sheet.dismiss();
-                    openStations();
-                });
-        sheet.row("Переименовать станцию", stationLabel, v -> {
-            sheet.dismiss();
-            renameCurrent();
-        });
-        sheet.row("Проверить обновление", "Текущая версия " + BuildConfig.VERSION_NAME, v -> {
-            sheet.dismiss();
-            checkAppUpdate();
-        });
-        sheet.row("Открыть в браузере", stationUrl, v -> {
-            sheet.dismiss();
-            openExternal(stationUrl);
-        });
-        sheet.negative("Закрыть");
-        sheet.show();
+        AppMenu.show(this, navHeight(), stationLabel, stationUrl,
+                this::openStations,
+                this::renameCurrent,
+                () -> UpdateFlow.check(this, navHeight()),
+                () -> openExternal(stationUrl));
     }
 
     private void openExternal(String url) {
@@ -491,70 +626,20 @@ public class MainActivity extends Activity {
 
     private void renameCurrent() {
         if (station == null) return;
-        final Ui.Sheet sheet = new Ui.Sheet(this, "Название станции",
-                "Так станция будет видна в списке и в меню", navHeight());
-        final android.widget.EditText input = Ui.field(this, "Например, «Кухня»", station.name);
+        final Ui.Sheet sheet = new Ui.Sheet(this, getString(R.string.rename_title),
+                getString(R.string.rename_subtitle), navHeight());
+        final android.widget.EditText input = Ui.field(this, getString(R.string.rename_hint), station.name);
         sheet.add(input);
         sheet.keyboard();
-        sheet.negative("Отмена");
-        sheet.positive("Сохранить", () -> {
+        sheet.negative(getString(R.string.action_cancel));
+        sheet.positive(getString(R.string.action_save), () -> {
             StationStore.rename(this, station, input.getText().toString());
             Station updated = StationStore.active(this);
             if (updated != null) station = updated;
-            Toast.makeText(this, "Название сохранено", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.rename_saved), Toast.LENGTH_SHORT).show();
             sheet.dismiss();
         });
         sheet.show();
-    }
-
-    private void checkAppUpdate() {
-        final UpdateSheet sheet = new UpdateSheet(this, navHeight());
-        sheet.showChecking();
-        sheet.show();
-        UpdateChecker.check(this, true, (info, error) -> {
-            if (isFinishing() || isDestroyed() || sheet.isDismissed()) {
-                sheet.dismiss();
-                return;
-            }
-            if (error != null) {
-                sheet.showCheckError(error, () -> {
-                    sheet.dismiss();
-                    checkAppUpdate();
-                });
-            } else if (info == null) {
-                sheet.showUpToDate(BuildConfig.VERSION_NAME);
-            } else {
-                showUpdateAvailable(sheet, info);
-            }
-        });
-    }
-
-    private void showUpdateAvailable(final UpdateSheet sheet, final UpdateChecker.UpdateInfo info) {
-        if (sheet.isDismissed()) return;
-        sheet.showAvailable(info,
-                () -> startDownload(sheet, info),
-                sheet::dismiss);
-        sheet.show();
-    }
-
-    private void startDownload(final UpdateSheet sheet, final UpdateChecker.UpdateInfo info) {
-        sheet.showDownloading(info);
-        UpdateChecker.downloadAndInstall(this, info,
-                (downloaded, total) -> sheet.setProgress(downloaded, total),
-                (file, error) -> {
-                    if (isFinishing() || isDestroyed()) {
-                        sheet.dismiss();
-                        return;
-                    }
-                    if (error != null) {
-                        sheet.showDownloadError(error, () -> startDownload(sheet, info));
-                        return;
-                    }
-                    sheet.showReady(file, () -> {
-                        sheet.dismiss();
-                        UpdateChecker.install(this, file);
-                    }, sheet::dismiss);
-                });
     }
 
     @Override
@@ -573,6 +658,10 @@ public class MainActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
+        if (rendererGone) {
+            recreate();
+            return;
+        }
         if (webView != null) webView.onResume();
         Station active = StationStore.active(this);
         if (active == null) {
@@ -613,7 +702,12 @@ public class MainActivity extends Activity {
         cancelLoadTimeout();
         if (pull != null) pull.finishRefresh();
         if (webView != null) {
-            webView.destroy();
+            try {
+                webView.removeJavascriptInterface("MidiPultSelection");
+                webView.destroy();
+            } catch (Exception ignored) {
+                // Рендерер мог уже упасть — уничтожение мёртвого WebView не критично.
+            }
             webView = null;
         }
         super.onDestroy();
@@ -621,16 +715,47 @@ public class MainActivity extends Activity {
 
     /**
      * WebView по умолчанию запрещает родителю перехватывать жесты, из-за чего
-     * перестаёт работать обновление «потянуть вниз».
+     * перестаёт работать обновление «потянуть вниз». Заодно не даём открывать
+     * системное меню выделения, если долгое нажатие было вне поля ввода.
      */
     private static final class PageWebView extends WebView {
+        private boolean editableTouched;
+
         PageWebView(Context context) {
             super(context);
+        }
+
+        void setEditableTouched(boolean value) {
+            editableTouched = value;
         }
 
         @Override
         public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
             super.requestDisallowInterceptTouchEvent(false);
+        }
+
+        @Override
+        public ActionMode startActionMode(ActionMode.Callback callback) {
+            return editableTouched ? super.startActionMode(callback) : null;
+        }
+
+        @Override
+        public ActionMode startActionMode(ActionMode.Callback callback, int type) {
+            return editableTouched ? super.startActionMode(callback, type) : null;
+        }
+    }
+
+    /** Мост из страницы: сообщает, пришлось ли касание на поле ввода. */
+    private static final class SelectionBridge {
+        private final PageWebView view;
+
+        SelectionBridge(PageWebView view) {
+            this.view = view;
+        }
+
+        @JavascriptInterface
+        public void setEditable(boolean editable) {
+            view.setEditableTouched(editable);
         }
     }
 }

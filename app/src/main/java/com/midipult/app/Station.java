@@ -21,15 +21,8 @@ public final class Station {
         this.ip = ip == null ? "" : ip;
         this.model = model == null ? "" : model;
         this.version = version == null ? "" : version;
-        String fallback = this.name.trim().isEmpty() ? this.url : this.name.trim();
+        String fallback = this.url;
         this.id = id == null || id.trim().isEmpty() ? fallback : id.trim();
-    }
-
-    public String label() {
-        String title = name.trim();
-        if (title.isEmpty()) title = ip.trim().isEmpty() ? url : ip;
-        if (!version.trim().isEmpty()) title += " · v" + version;
-        return title;
     }
 
     public JSONObject toJson() {

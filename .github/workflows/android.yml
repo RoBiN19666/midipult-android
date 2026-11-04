@@ -9,9 +9,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -24,6 +29,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/platforms/android-35
+            /usr/local/lib/android/sdk/build-tools/35.0.0
+          key: android-sdk-35-v1
 
       - name: Install Android SDK packages
         run: |
@@ -39,8 +53,10 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(grep '^versionName=' version.properties | cut -d= -f2)
+          VERSION=$(grep '^versionName=' version.properties | cut -d= -f2 | tr -d '\r')
+          CODE=$(grep '^versionCode=' version.properties | cut -d= -f2 | tr -d '\r')
           echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag matches version
         if: startsWith(github.ref, 'refs/tags/android-v')
@@ -48,6 +64,32 @@ jobs:
           EXPECTED="android-v${{ steps.version.outputs.name }}"
           if [ "$EXPECTED" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match version.properties ($EXPECTED)" >&2
+            exit 1
+          fi
+
+      - name: Verify versionCode and versionName
+        run: |
+          CODE="${{ steps.version.outputs.code }}"
+          NAME="${{ steps.version.outputs.name }}"
+          case "$CODE" in
+            ''|*[!0-9]*) echo "versionCode must be a positive integer, got '$CODE'" >&2; exit 1 ;;
+          esac
+          if [ "$CODE" -le 0 ]; then
+            echo "versionCode must be positive" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != refs/tags/android-v* ]]; then
+            exit 0
+          fi
+          LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name", ""))' || true)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous release found; skip comparison"
+            exit 0
+          fi
+          LATEST="${LATEST_TAG#android-v}"
+          if [ "$LATEST" = "$NAME" ] || [ "$(printf '%s\n%s\n' "$LATEST" "$NAME" | sort -V | tail -n1)" != "$NAME" ]; then
+            echo "versionName $NAME must be greater than latest release $LATEST" >&2
             exit 1
           fi
 
@@ -70,6 +112,14 @@ jobs:
             SUFFIX="-debug"
           fi
           test -f "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools/35.0.0" -name aapt2 -type f | head -n 1)
+          test -n "$AAPT"
+          BADGING=$("$AAPT" dump badging "$APK" | head -n 1)
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "versionCode='${{ steps.version.outputs.code }}'" \
+            || { echo "APK versionCode does not match version.properties" >&2; exit 1; }
+          echo "$BADGING" | grep -q "versionName='${{ steps.version.outputs.name }}'" \
+            || { echo "APK versionName does not match version.properties" >&2; exit 1; }
           NAME="midipult-android-${{ steps.version.outputs.name }}${SUFFIX}.apk"
           cp "$APK" "$NAME"
           sha256sum "$NAME" > "$NAME.sha256"

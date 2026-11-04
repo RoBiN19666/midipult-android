@@ -66,7 +66,7 @@ public final class DiscoveryClient {
                             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                             socket.receive(packet);
                             String text = new String(packet.getData(), 0, packet.getLength(), "UTF-8");
-                            Station station = parse(text, packet.getAddress().getHostAddress());
+                            Station station = parse(app, text, packet.getAddress().getHostAddress());
                             if (station != null && seen.add(station.url)) found.add(station);
                         } catch (SocketTimeoutException ignored) {
                             // Продолжаем слушать до общего дедлайна.
@@ -108,7 +108,7 @@ public final class DiscoveryClient {
         return result;
     }
 
-    private static Station parse(String text, String senderIp) {
+    private static Station parse(Context context, String text, String senderIp) {
         try {
             JSONObject object = new JSONObject(text);
             if (!"midipult".equals(object.optString("service"))) return null;
@@ -116,14 +116,15 @@ public final class DiscoveryClient {
             if (ip.isEmpty()) ip = senderIp;
             int port = object.optInt("port", 8055);
             if (port < 1 || port > 65535) port = 8055;
-            String name = object.optString("name", "MidiPult");
+            String name = object.optString("name", "").trim();
+            if (name.isEmpty()) name = context.getString(R.string.column_fallback, ip);
             return new Station(
                     name,
                     "http://" + ip + ":" + port,
                     ip,
                     object.optString("model", ""),
                     object.optString("version", ""),
-                    object.optString("id", name)
+                    object.optString("id", "")
             );
         } catch (Exception ignored) {
             return null;
