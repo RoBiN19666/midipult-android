@@ -164,18 +164,17 @@ final class Ui {
         return button;
     }
 
-    static Button iconButton(Context context, int iconRes, int tint) {
-        Button button = base(context, "");
-        button.setBackground(rounded(0x18FFFFFF, dp(context, 14), 0x24FFFFFF, 1));
-        Drawable icon = context.getDrawable(iconRes);
-        if (icon != null) {
-            icon.setTint(tint);
-            button.setCompoundDrawablesWithIntrinsicBounds(null, icon, null, null);
-        }
-        button.setPadding(0, 0, 0, 0);
-        button.setMinWidth(0);
-        button.setMinimumWidth(0);
-        return button;
+    static FrameLayout iconButton(Context context, int iconRes, int tint) {
+        FrameLayout box = new FrameLayout(context);
+        box.setBackground(rounded(0x18FFFFFF, dp(context, 14), 0x24FFFFFF, 1));
+        box.setClickable(true);
+        box.setFocusable(true);
+        ImageView icon = iconView(context, iconRes, tint, 22);
+        box.addView(icon, new FrameLayout.LayoutParams(
+                dp(context, 22), dp(context, 22), Gravity.CENTER));
+        Drawable ripple = selectable(context);
+        if (ripple != null) box.setForeground(ripple);
+        return box;
     }
 
     private static Button base(Context context, String text) {
@@ -186,10 +185,9 @@ final class Ui {
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         button.setGravity(Gravity.CENTER);
         button.setIncludeFontPadding(false);
-        button.setLineSpacing(0, 1.05f);
         button.setMinHeight(dp(context, 44));
         button.setMinimumHeight(dp(context, 44));
-        button.setPadding(dp(context, 16), dp(context, 2), dp(context, 16), dp(context, 2));
+        button.setPadding(dp(context, 16), dp(context, 10), dp(context, 16), 0);
         button.setStateListAnimator(null);
         return button;
     }

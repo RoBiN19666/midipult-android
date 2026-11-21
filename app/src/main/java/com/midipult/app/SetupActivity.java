@@ -531,7 +531,7 @@ public class SetupActivity extends Activity {
         open.setOnClickListener(v -> open(station));
         actions.addView(open, new LinearLayout.LayoutParams(0, Ui.dp(this, 46), 1f));
 
-        Button rename = Ui.iconButton(this, R.drawable.ic_edit, Ui.TEXT);
+        View rename = Ui.iconButton(this, R.drawable.ic_edit, Ui.TEXT);
         rename.setContentDescription(getString(R.string.setup_cd_rename));
         rename.setOnClickListener(v -> rename(station));
         LinearLayout.LayoutParams renameParams = new LinearLayout.LayoutParams(
@@ -539,7 +539,7 @@ public class SetupActivity extends Activity {
         renameParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         actions.addView(rename, renameParams);
 
-        Button delete = Ui.iconButton(this, R.drawable.ic_delete, Ui.DANGER);
+        View delete = Ui.iconButton(this, R.drawable.ic_delete, Ui.DANGER);
         delete.setContentDescription(getString(R.string.setup_cd_delete));
         delete.setOnClickListener(v -> delete(station));
         LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
