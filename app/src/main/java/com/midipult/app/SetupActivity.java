@@ -46,6 +46,7 @@ public class SetupActivity extends Activity {
     private boolean scanning;
     private boolean manage;
     private final List<Station> shown = new ArrayList<>();
+    private volatile boolean refreshingVersions;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +69,7 @@ public class SetupActivity extends Activity {
             scan();
         } else {
             status.setText(getString(R.string.setup_status_saved, saved.size()));
+            refreshVersions(saved);
         }
         animateContentIn();
     }
@@ -264,6 +266,59 @@ public class SetupActivity extends Activity {
         }
     }
 
+    private void refreshVersions(List<Station> stations) {
+        if (refreshingVersions || stations == null || stations.isEmpty()) return;
+        refreshingVersions = true;
+        final List<Station> copy = new ArrayList<>(stations);
+        new Thread(() -> {
+            List<Station> changed = new ArrayList<>();
+            for (Station station : copy) {
+                if (isFinishing()) break;
+                HttpURLConnection connection = null;
+                try {
+                    URL url = new URL(station.url + "/version.json");
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setConnectTimeout(2500);
+                    connection.setReadTimeout(2500);
+                    connection.setRequestProperty("User-Agent",
+                            "MidiPult-Android/" + BuildConfig.VERSION_NAME);
+                    if (connection.getResponseCode() != 200) continue;
+                    JSONObject object = new JSONObject(
+                            new String(read(connection), "UTF-8"));
+                    String service = object.optString("service", "");
+                    String version = object.optString("version", "").trim();
+                    String model = object.optString("model", station.model);
+                    boolean knownPanel = service.isEmpty()
+                            || "midipult".equalsIgnoreCase(service);
+                    if (!knownPanel || version.isEmpty()) continue;
+                    if (version.equals(station.version) && model.equals(station.model)) continue;
+                    changed.add(new Station(station.name, station.url, station.ip,
+                            model, version, station.id));
+                } catch (Exception ignored) {
+                    // Колонка могла уйти в офлайн — оставляем сохранённую версию.
+                } finally {
+                    if (connection != null) {
+                        try {
+                            connection.disconnect();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            }
+            final List<Station> updates = changed;
+            main.post(() -> {
+                refreshingVersions = false;
+                if (isFinishing() || updates.isEmpty()) return;
+                for (Station station : updates) StationStore.upsert(this, station);
+                List<Station> fresh = StationStore.load(this);
+                render(fresh);
+                if (!scanning) {
+                    status.setText(getString(R.string.setup_status_saved, fresh.size()));
+                }
+            });
+        }).start();
+    }
+
     private void scan() {
         if (scanning) return;
         scanning = true;
@@ -351,6 +406,7 @@ public class SetupActivity extends Activity {
             List<Station> all = new ArrayList<>(map.values());
             StationStore.save(this, all);
             render(all);
+            refreshVersions(all);
             if (all.isEmpty()) {
                 status.setText(getString(R.string.setup_not_found));
             } else {

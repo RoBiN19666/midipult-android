@@ -134,7 +134,7 @@ public class MainActivity extends Activity {
     private View build() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Ui.BG);
+        root.setBackground(Ui.background());
 
         content = new FrameLayout(this);
         content.setBackgroundColor(Ui.BG);

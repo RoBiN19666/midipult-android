@@ -27,7 +27,7 @@ import android.widget.TextView;
 
 /** Общая визуальная тема приложения в стиле панели MidiPult. */
 final class Ui {
-    static final int BG = 0xFF080B12;
+    static final int BG = 0xFF07090F;
     static final int BG2 = 0xFF101624;
     static final int CARD = 0xFF151C2B;
     static final int CARD2 = 0xFF101622;
@@ -64,7 +64,7 @@ final class Ui {
     static GradientDrawable background() {
         GradientDrawable drawable = new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                new int[]{BG, 0xFF0B1220, 0xFF121A2A});
+                new int[]{0xFF0B1220, 0xFF0E1526, 0xFF121A2A});
         drawable.setGradientType(GradientDrawable.LINEAR_GRADIENT);
         return drawable;
     }
@@ -227,6 +227,11 @@ final class Ui {
      */
     static void edgeInsets(Activity activity, View root, final View content, final View bar) {
         Window window = activity.getWindow();
+        if (Build.VERSION.SDK_INT >= 29) {
+            window.setNavigationBarContrastEnforced(false);
+            window.setNavigationBarDividerColor(Color.TRANSPARENT);
+        }
+        window.setBackgroundDrawable(background());
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false);
             window.setStatusBarColor(Color.TRANSPARENT);
@@ -239,8 +244,8 @@ final class Ui {
                 return insets;
             });
         } else {
-            window.setStatusBarColor(BG);
-            window.setNavigationBarColor(BG);
+            window.setStatusBarColor(BG2);
+            window.setNavigationBarColor(BG2);
         }
     }
 
@@ -251,6 +256,11 @@ final class Ui {
     static void screenInsets(Activity activity, View root, final View content, final View bar,
                              final int sideDp, final int topDp, final int bottomDp) {
         Window window = activity.getWindow();
+        if (Build.VERSION.SDK_INT >= 29) {
+            window.setNavigationBarContrastEnforced(false);
+            window.setNavigationBarDividerColor(Color.TRANSPARENT);
+        }
+        window.setBackgroundDrawable(background());
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false);
             window.setStatusBarColor(Color.TRANSPARENT);
@@ -265,8 +275,8 @@ final class Ui {
                 return insets;
             });
         } else {
-            window.setStatusBarColor(BG);
-            window.setNavigationBarColor(BG);
+            window.setStatusBarColor(BG2);
+            window.setNavigationBarColor(BG2);
             int side = dp(activity, sideDp);
             content.setPadding(side, dp(activity, topDp), side, dp(activity, bottomDp));
         }
