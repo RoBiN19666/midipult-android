@@ -1,12 +1,15 @@
 package com.midipult.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -39,6 +42,7 @@ import java.util.Locale;
 /** Основной экран: полноэкранная панель, нижняя навигация и меню приложения. */
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER = 77;
+    private static final int NOTIFICATION_PERMISSION = 78;
     private static final long LOAD_TIMEOUT_MS = 25000L;
 
     /**
@@ -110,12 +114,21 @@ public class MainActivity extends Activity {
         View root = build();
         setContentView(root);
         Ui.edgeInsets(this, root, content, bottomNav);
+        requestNotificationPermission();
         load(station);
         bottomNav.post(() -> UpdateChecker.autoCheck(this, (info, error) -> {
             if (isFinishing() || isDestroyed()) return;
             if (info == null) return;
             UpdateFlow.showAvailable(this, navHeight(), info);
         }));
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return;
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) return;
+        requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                NOTIFICATION_PERMISSION);
     }
 
     private View build() {
@@ -250,6 +263,8 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new SelectionBridge((PageWebView) webView), "MidiPultSelection");
         webView.addJavascriptInterface(new PullBridge(), "MidiPultPull");
+        webView.addJavascriptInterface(new MediaBridge.Js(this), "MidiPultMedia");
+        MediaBridge.attach(webView);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -710,7 +725,9 @@ public class MainActivity extends Activity {
         if (webView != null) {
             try {
                 webView.removeJavascriptInterface("MidiPultSelection");
-            webView.removeJavascriptInterface("MidiPultPull");
+                webView.removeJavascriptInterface("MidiPultPull");
+                webView.removeJavascriptInterface("MidiPultMedia");
+                MediaBridge.detach(webView);
                 webView.destroy();
             } catch (Exception ignored) {
                 // Рендерер мог уже упасть — уничтожение мёртвого WebView не критично.

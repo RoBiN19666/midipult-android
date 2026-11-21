@@ -130,4 +130,8 @@
     <string name="update_installer_failed">Не удалось открыть установщик</string>
     <string name="network_github_code">GitHub вернул код %1$s</string>
     <string name="network_server_code">Сервер вернул код %1$s</string>
+
+    <!-- Системный плеер -->
+    <string name="media_channel_name">Плеер MidiPult</string>
+    <string name="media_channel_description">Управление музыкой на колонке</string>
 </resources>
