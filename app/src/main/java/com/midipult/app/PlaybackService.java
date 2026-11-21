@@ -11,6 +11,8 @@ import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.VolumeProvider;
 import android.media.session.MediaSession;
@@ -65,6 +67,25 @@ public final class PlaybackService extends Service {
     private long position;
     private long duration;
     private int volume = 40;
+
+    private AudioManager audioManager;
+    // true — громкость станции (VolumeProvider), false — громкость телефона.
+    private boolean remoteVolume = true;
+    private boolean localVolume;
+
+    /**
+     * Пока на телефоне играет другой плеер (например, VK Музыка поверх
+     * Bluetooth), кнопки громкости должны менять громкость телефона, а не
+     * станции. Иначе системная шкала «Громкость мультимедиа» крутит колонку,
+     * и два пульта дерутся за одно и то же.
+     */
+    private final Runnable volumeWatch = new Runnable() {
+        @Override
+        public void run() {
+            applyVolumeMode(!remoteVolume || otherMusicPlaying());
+            main.postDelayed(this, 3000);
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -128,6 +149,8 @@ public final class PlaybackService extends Service {
         };
         session.setPlaybackToRemote(volumeProvider);
         session.setActive(true);
+        audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
+        main.postDelayed(volumeWatch, 3000);
     }
 
     @Override
@@ -176,6 +199,10 @@ public final class PlaybackService extends Service {
             duration = Math.max(0, data.optLong("duration", duration));
             int nextVolume = data.optInt("volume", volume);
             applyPanelVolume(nextVolume);
+            // Панель помечает трек, который играет сам телефон: тогда
+            // громкость остаётся телефону, а не станции.
+            remoteVolume = !data.optBoolean("fromPhone", false);
+            applyVolumeMode(!remoteVolume || otherMusicPlaying());
             if (cover.isEmpty()) {
                 artUrl = "";
                 art = null;
@@ -248,6 +275,33 @@ public final class PlaybackService extends Service {
     private void changeVolume(int value) {
         applyPanelVolume(value);
         MediaBridge.volume(this, volume);
+    }
+
+    /** Играет ли на телефоне что-то ещё, кроме нашей колонки. */
+    private boolean otherMusicPlaying() {
+        try {
+            return audioManager != null && audioManager.isMusicActive();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void applyVolumeMode(boolean local) {
+        if (session == null || localVolume == local) return;
+        localVolume = local;
+        try {
+            if (local) {
+                AudioAttributes attrs = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build();
+                session.setPlaybackToLocal(attrs);
+            } else {
+                session.setPlaybackToRemote(volumeProvider);
+            }
+        } catch (Exception ignored) {
+            // Сессия могла быть уже освобождена.
+        }
     }
 
     private void loadArt(String url) {
@@ -370,6 +424,7 @@ public final class PlaybackService extends Service {
 
     @Override
     public void onDestroy() {
+        main.removeCallbacks(volumeWatch);
         io.shutdownNow();
         if (session != null) {
             session.setActive(false);
