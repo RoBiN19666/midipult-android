@@ -178,17 +178,17 @@ public class MainActivity extends Activity {
         box.setPadding(Ui.dp(this, 28), Ui.dp(this, 28), Ui.dp(this, 28), Ui.dp(this, 28));
         box.setVisibility(View.GONE);
 
-        TextView badge = new TextView(this);
-        badge.setText("!");
-        badge.setTextSize(30);
-        badge.setTypeface(Typeface.DEFAULT_BOLD);
-        badge.setTextColor(0xFFFFFFFF);
-        badge.setGravity(Gravity.CENTER);
-        GradientDrawable circle = new GradientDrawable();
+        android.widget.FrameLayout badge = new android.widget.FrameLayout(this);
+        GradientDrawable circle = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Ui.ACCENT, Ui.ACCENT2});
         circle.setShape(GradientDrawable.OVAL);
-        circle.setColor(Ui.ACCENT);
         circle.setStroke(Math.max(1, Ui.dp(this, 1)), 0x55FFFFFF);
         badge.setBackground(circle);
+        android.widget.ImageView badgeIcon = Ui.iconView(this, R.drawable.ic_info,
+                0xFFFFFFFF, 34);
+        badge.addView(badgeIcon, new android.widget.FrameLayout.LayoutParams(
+                Ui.dp(this, 34), Ui.dp(this, 34), Gravity.CENTER));
         LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(
                 Ui.dp(this, 76), Ui.dp(this, 76));
         badgeParams.gravity = Gravity.CENTER_HORIZONTAL;

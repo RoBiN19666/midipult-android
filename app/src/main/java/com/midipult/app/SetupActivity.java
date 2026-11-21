@@ -103,38 +103,60 @@ public class SetupActivity extends Activity {
         contentArea.setOrientation(LinearLayout.VERTICAL);
 
         LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.addView(Ui.title(this, getString(R.string.app_name), 26));
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(R.drawable.ic_launcher);
+        header.addView(logo, new LinearLayout.LayoutParams(
+                Ui.dp(this, 48), Ui.dp(this, 48)));
+
+        LinearLayout titles = new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
+        titles.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        titles.addView(Ui.title(this, getString(R.string.app_name), 27));
         TextView subtitle = Ui.muted(this, getString(R.string.setup_subtitle), 13);
-        subtitle.setPadding(0, Ui.dp(this, 4), 0, 0);
-        header.addView(subtitle);
+        subtitle.setPadding(0, Ui.dp(this, 2), 0, 0);
+        titles.addView(subtitle);
+        header.addView(titles, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         contentArea.addView(header);
 
-        LinearLayout statusCard = Ui.card(this);
-        LinearLayout statusRow = new LinearLayout(this);
-        statusRow.setOrientation(LinearLayout.HORIZONTAL);
-        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout statusCard = new LinearLayout(this);
+        statusCard.setOrientation(LinearLayout.HORIZONTAL);
+        statusCard.setGravity(Gravity.CENTER_VERTICAL);
+        statusCard.setPadding(Ui.dp(this, 14), Ui.dp(this, 11),
+                Ui.dp(this, 14), Ui.dp(this, 11));
+        statusCard.setBackground(Ui.rounded(0x141A2437, Ui.dp(this, 18), Ui.STROKE, 1));
+        LinearLayout.LayoutParams statusCardParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusCardParams.topMargin = Ui.dp(this, 18);
+        contentArea.addView(statusCard, statusCardParams);
+
         scanSpinner = new ProgressBar(this);
         scanSpinner.setIndeterminate(true);
         scanSpinner.setIndeterminateTintList(ColorStateList.valueOf(Ui.ACCENT));
         scanSpinner.setVisibility(View.GONE);
-        statusRow.addView(scanSpinner, new LinearLayout.LayoutParams(
-                Ui.dp(this, 20), Ui.dp(this, 20)));
+        statusCard.addView(scanSpinner, new LinearLayout.LayoutParams(
+                Ui.dp(this, 18), Ui.dp(this, 18)));
         status = Ui.muted(this, getString(R.string.setup_scanning), 13);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         statusParams.leftMargin = Ui.dp(this, 10);
-        statusRow.addView(status, statusParams);
-        statusCard.addView(statusRow);
-        contentArea.addView(statusCard, Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 18, this));
+        statusCard.addView(status, statusParams);
+
+        TextView section = Ui.muted(this, getString(R.string.setup_my_columns), 10);
+        section.setLetterSpacing(0.14f);
+        section.setAllCaps(true);
+        section.setPadding(0, Ui.dp(this, 18), 0, Ui.dp(this, 2));
+        contentArea.addView(section);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        scrollParams.topMargin = Ui.dp(this, 16);
+        scrollParams.topMargin = Ui.dp(this, 6);
         contentArea.addView(scroll, scrollParams);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
@@ -148,13 +170,25 @@ public class SetupActivity extends Activity {
         buttons.setPadding(0, Ui.dp(this, 12), 0, 0);
 
         scanButton = Ui.primary(this, getString(R.string.action_scan));
-        scanButton.setMinHeight(Ui.dp(this, 48));
+        scanButton.setMinHeight(Ui.dp(this, 50));
+        android.graphics.drawable.Drawable scanIcon = getDrawable(R.drawable.ic_scan);
+        if (scanIcon != null) {
+            scanIcon.setTint(Color.WHITE);
+            scanButton.setCompoundDrawablesWithIntrinsicBounds(scanIcon, null, null, null);
+            scanButton.setCompoundDrawablePadding(Ui.dp(this, 8));
+        }
         scanButton.setOnClickListener(v -> scan());
         buttons.addView(scanButton, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         Button manual = Ui.ghost(this, getString(R.string.action_add_column));
-        manual.setMinHeight(Ui.dp(this, 48));
+        manual.setMinHeight(Ui.dp(this, 50));
+        android.graphics.drawable.Drawable addIcon = getDrawable(R.drawable.ic_add);
+        if (addIcon != null) {
+            addIcon.setTint(Ui.TEXT);
+            manual.setCompoundDrawablesWithIntrinsicBounds(addIcon, null, null, null);
+            manual.setCompoundDrawablePadding(Ui.dp(this, 6));
+        }
         manual.setOnClickListener(v -> manual());
         LinearLayout.LayoutParams manualParams = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -341,9 +375,25 @@ public class SetupActivity extends Activity {
         shown.addAll(snapshot);
         list.removeAllViews();
         if (snapshot.isEmpty()) {
-            TextView empty = Ui.muted(this, getString(R.string.setup_empty), 13);
+            LinearLayout empty = new LinearLayout(this);
+            empty.setOrientation(LinearLayout.VERTICAL);
             empty.setGravity(Gravity.CENTER_HORIZONTAL);
-            empty.setPadding(0, Ui.dp(this, 20), 0, Ui.dp(this, 20));
+            empty.setPadding(0, Ui.dp(this, 48), 0, Ui.dp(this, 24));
+
+            android.widget.ImageView icon = Ui.iconView(this,
+                    R.drawable.ic_nav_stations, Ui.MUTED, 38);
+            empty.addView(icon, new LinearLayout.LayoutParams(
+                    Ui.dp(this, 38), Ui.dp(this, 38)));
+
+            TextView title = Ui.title(this, getString(R.string.setup_empty_title), 16);
+            title.setGravity(Gravity.CENTER);
+            title.setPadding(0, Ui.dp(this, 14), 0, 0);
+            empty.addView(title);
+
+            TextView hint = Ui.muted(this, getString(R.string.setup_empty), 12);
+            hint.setGravity(Gravity.CENTER);
+            hint.setPadding(Ui.dp(this, 20), Ui.dp(this, 6), Ui.dp(this, 20), 0);
+            empty.addView(hint);
             list.addView(empty);
             return;
         }
@@ -352,14 +402,54 @@ public class SetupActivity extends Activity {
 
     private View row(Station station) {
         LinearLayout box = Ui.card(this);
+        box.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.setMargins(0, 0, 0, Ui.dp(this, 10));
+        params.setMargins(0, 0, 0, Ui.dp(this, 12));
         box.setLayoutParams(params);
 
+        Station active = StationStore.active(this);
+        boolean isActive = active != null
+                && (active.id.equals(station.id) || active.url.equals(station.url));
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout tile = new FrameLayout(this);
+        tile.setBackground(Ui.gradient(Ui.ACCENT, 0xFF4F8CFF, Ui.dp(this, 14)));
+        android.widget.ImageView stationIcon = Ui.iconView(this,
+                R.drawable.ic_nav_stations, Color.WHITE, 22);
+        tile.addView(stationIcon, new FrameLayout.LayoutParams(
+                Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER));
+        LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(
+                Ui.dp(this, 46), Ui.dp(this, 46));
+        tileParams.rightMargin = Ui.dp(this, 12);
+        head.addView(tile, tileParams);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout nameRow = new LinearLayout(this);
+        nameRow.setOrientation(LinearLayout.HORIZONTAL);
+        nameRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView name = Ui.title(this,
                 station.name == null || station.name.isEmpty() ? station.ip : station.name, 17);
-        box.addView(name);
+        nameRow.addView(name, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (isActive) {
+            TextView badge = new TextView(this);
+            badge.setText(getString(R.string.setup_active));
+            badge.setTextSize(9);
+            badge.setTextColor(Ui.SUCCESS);
+            badge.setPadding(Ui.dp(this, 7), Ui.dp(this, 2), Ui.dp(this, 7), Ui.dp(this, 2));
+            badge.setBackground(Ui.rounded(0x1F34D399, Ui.dp(this, 8), 0x3334D399, 1));
+            LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            badgeParams.leftMargin = Ui.dp(this, 8);
+            nameRow.addView(badge, badgeParams);
+        }
+        texts.addView(nameRow);
 
         List<String> bits = new ArrayList<>();
         if (!station.ip.isEmpty()) bits.add(station.ip);
@@ -371,30 +461,33 @@ public class SetupActivity extends Activity {
         }
         TextView meta = Ui.muted(this,
                 metaText.length() == 0 ? station.url : metaText.toString(), 12);
-        meta.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 10));
-        box.addView(meta);
+        meta.setPadding(0, Ui.dp(this, 3), 0, 0);
+        texts.addView(meta);
+        head.addView(texts, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        box.addView(head);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(0, Ui.dp(this, 12), 0, 0);
 
         Button open = Ui.primary(this, getString(R.string.action_open));
         open.setOnClickListener(v -> open(station));
-        actions.addView(open, new LinearLayout.LayoutParams(0, Ui.dp(this, 44), 1f));
+        actions.addView(open, new LinearLayout.LayoutParams(0, Ui.dp(this, 46), 1f));
 
-        Button rename = Ui.icon(this, "✎");
+        Button rename = Ui.iconButton(this, R.drawable.ic_edit, Ui.TEXT);
         rename.setContentDescription(getString(R.string.setup_cd_rename));
         rename.setOnClickListener(v -> rename(station));
         LinearLayout.LayoutParams renameParams = new LinearLayout.LayoutParams(
-                Ui.dp(this, 46), Ui.dp(this, 44));
+                Ui.dp(this, 46), Ui.dp(this, 46));
         renameParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         actions.addView(rename, renameParams);
 
-        Button delete = Ui.icon(this, "✕");
-        delete.setTextColor(Ui.DANGER);
+        Button delete = Ui.iconButton(this, R.drawable.ic_delete, Ui.DANGER);
         delete.setContentDescription(getString(R.string.setup_cd_delete));
         delete.setOnClickListener(v -> delete(station));
         LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
-                Ui.dp(this, 46), Ui.dp(this, 44));
+                Ui.dp(this, 46), Ui.dp(this, 46));
         deleteParams.setMargins(Ui.dp(this, 8), 0, 0, 0);
         actions.addView(delete, deleteParams);
         box.addView(actions);

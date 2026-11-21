@@ -13,24 +13,28 @@ final class AppMenu {
                      Runnable onUpdate, Runnable onBrowser) {
         final Ui.Sheet sheet = new Ui.Sheet(activity, activity.getString(R.string.app_name),
                 activity.getString(R.string.menu_subtitle), bottomOffsetPx);
-        sheet.row(activity.getString(R.string.menu_columns),
+        sheet.item(R.drawable.ic_nav_stations,
+                activity.getString(R.string.menu_columns),
                 activity.getString(R.string.menu_columns_desc), v -> {
                     sheet.dismiss();
                     if (onStations != null) onStations.run();
                 });
-        sheet.row(activity.getString(R.string.menu_rename), stationName, v -> {
-            sheet.dismiss();
-            if (onRename != null) onRename.run();
-        });
-        sheet.row(activity.getString(R.string.menu_update),
+        sheet.item(R.drawable.ic_edit,
+                activity.getString(R.string.menu_rename), stationName, v -> {
+                    sheet.dismiss();
+                    if (onRename != null) onRename.run();
+                });
+        sheet.item(R.drawable.ic_update,
+                activity.getString(R.string.menu_update),
                 activity.getString(R.string.menu_update_desc, BuildConfig.VERSION_NAME), v -> {
                     sheet.dismiss();
                     if (onUpdate != null) onUpdate.run();
                 });
-        sheet.row(activity.getString(R.string.menu_browser), stationUrl, v -> {
-            sheet.dismiss();
-            if (onBrowser != null) onBrowser.run();
-        });
+        sheet.item(R.drawable.ic_open,
+                activity.getString(R.string.menu_browser), stationUrl, v -> {
+                    sheet.dismiss();
+                    if (onBrowser != null) onBrowser.run();
+                });
         sheet.negative(activity.getString(R.string.action_close));
         sheet.show();
     }
