@@ -249,6 +249,7 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new SelectionBridge((PageWebView) webView), "MidiPultSelection");
+        webView.addJavascriptInterface(new PullBridge(), "MidiPultPull");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -709,6 +710,7 @@ public class MainActivity extends Activity {
         if (webView != null) {
             try {
                 webView.removeJavascriptInterface("MidiPultSelection");
+            webView.removeJavascriptInterface("MidiPultPull");
                 webView.destroy();
             } catch (Exception ignored) {
                 // Рендерер мог уже упасть — уничтожение мёртвого WebView не критично.
@@ -757,10 +759,19 @@ public class MainActivity extends Activity {
         SelectionBridge(PageWebView view) {
             this.view = view;
         }
-
         @JavascriptInterface
         public void setEditable(boolean editable) {
             view.setEditableTouched(editable);
+        }
+    }
+
+    /** Мост из страницы: на время вращения 3D-модели отключает pull-to-refresh. */
+    private final class PullBridge {
+        @JavascriptInterface
+        public void setEnabled(boolean enabled) {
+            runOnUiThread(() -> {
+                if (pull != null) pull.setPullEnabled(enabled);
+            });
         }
     }
 }

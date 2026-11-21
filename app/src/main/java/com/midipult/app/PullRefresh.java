@@ -36,6 +36,7 @@ final class PullRefresh extends FrameLayout {
     private float offset;
     private boolean pulling;
     private boolean refreshing;
+    private boolean pullEnabled = true;
 
     PullRefresh(Context context) {
         super(context);
@@ -87,6 +88,18 @@ final class PullRefresh extends FrameLayout {
         this.listener = listener;
     }
 
+    /**
+     * Временное отключение жеста. Нужно, когда палец на 3D-модели: вертикальное
+     * вращение не должно превращаться в «потянуть вниз» и обновление страницы.
+     */
+    void setPullEnabled(boolean enabled) {
+        pullEnabled = enabled;
+        if (!enabled && pulling) {
+            pulling = false;
+            apply(0f);
+        }
+    }
+
     void finishRefresh() {
         handler.removeCallbacks(timeout);
         if (!refreshing) return;
@@ -103,7 +116,7 @@ final class PullRefresh extends FrameLayout {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
-        if (refreshing) return false;
+        if (!pullEnabled || refreshing) return false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downY = event.getY();
@@ -125,7 +138,7 @@ final class PullRefresh extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (refreshing) return false;
+        if (!pullEnabled || refreshing) return false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 return true;
