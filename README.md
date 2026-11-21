@@ -12,7 +12,7 @@
 
 [Скачать APK](https://github.com/RoBiN19666/midipult-android/releases/latest)
 
-[Релиз Android 1.1.2](https://github.com/RoBiN19666/midipult-android/releases/tag/android-v1.1.2) ·
+[Релиз Android 1.1.3](https://github.com/RoBiN19666/midipult-android/releases/tag/android-v1.1.3) ·
 [Все релизы](https://github.com/RoBiN19666/midipult-android/releases)
 
 Нативная Android-оболочка вокруг веб-панели **[MidiPult](https://github.com/RoBiN19666/midipult)**.
@@ -20,7 +20,7 @@
 карточки и меню, а саму панель открывает в WebView. Изменения панели **не требуют
 пересборки APK**.
 
-Текущая версия — **1.1.2** (versionCode 16).
+Текущая версия — **1.1.3** (versionCode 17).
 
 ## Возможности
 

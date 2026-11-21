@@ -187,7 +187,7 @@ final class Ui {
         button.setIncludeFontPadding(false);
         button.setMinHeight(dp(context, 44));
         button.setMinimumHeight(dp(context, 44));
-        button.setPadding(dp(context, 16), dp(context, 10), dp(context, 16), 0);
+        button.setPadding(dp(context, 16), dp(context, 7), dp(context, 16), 0);
         button.setStateListAnimator(null);
         return button;
     }
