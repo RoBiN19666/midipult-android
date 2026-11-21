@@ -18,6 +18,7 @@ import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.os.Looper;
 
 import org.json.JSONObject;
@@ -100,13 +101,28 @@ public final class PlaybackService extends Service {
             }
         });
         volumeProvider = new VolumeProvider(VolumeProvider.VOLUME_CONTROL_ABSOLUTE, 100, volume) {
+            private long lastAdjustAt;
+            private int lastDirection;
+
             @Override
             public void onSetVolumeTo(int value) {
+                // После шага кнопками система иногда присылает абсолютное
+                // значение, рассчитанное от старой громкости. Если оно тянет
+                // ползунок назад — игнорируем, иначе UI скачет вверх-вниз.
+                long now = SystemClock.elapsedRealtime();
+                if (now - lastAdjustAt < 350 && lastDirection != 0) {
+                    if ((lastDirection > 0 && value < volume)
+                            || (lastDirection < 0 && value > volume)) {
+                        return;
+                    }
+                }
                 changeVolume(value);
             }
 
             @Override
             public void onAdjustVolume(int direction) {
+                lastDirection = Integer.signum(direction);
+                lastAdjustAt = SystemClock.elapsedRealtime();
                 changeVolume(volume + direction * 5);
             }
         };

@@ -184,9 +184,12 @@ final class Ui {
         button.setAllCaps(false);
         button.setTextSize(14);
         button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setGravity(Gravity.CENTER);
+        button.setIncludeFontPadding(false);
+        button.setLineSpacing(0, 1.05f);
         button.setMinHeight(dp(context, 44));
         button.setMinimumHeight(dp(context, 44));
-        button.setPadding(dp(context, 16), 0, dp(context, 16), 0);
+        button.setPadding(dp(context, 16), dp(context, 2), dp(context, 16), dp(context, 2));
         button.setStateListAnimator(null);
         return button;
     }
