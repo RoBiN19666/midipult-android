@@ -135,6 +135,7 @@ Workflow `.github/workflows/android.yml` запускается по тегу `a
 ## Ссылки
 
 - [Репозиторий панели](https://github.com/RoBiN19666/midipult)
+- [MidiPult для Windows](https://github.com/RoBiN19666/midipult-windows) — версия для компьютера
 - [Все релизы APK](https://github.com/RoBiN19666/midipult-android/releases)
 - [Issues](https://github.com/RoBiN19666/midipult-android/issues) — баги и предложения
 
