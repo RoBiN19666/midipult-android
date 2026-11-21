@@ -20,6 +20,12 @@
 карточки и меню, а саму панель открывает в WebView. Изменения панели **не требуют
 пересборки APK**.
 
+Клиенты для панели:
+
+- [MidiPult Windows](https://github.com/RoBiN19666/midipult-windows) — версия для компьютера:
+  поиск станций, панель в WebView2 в одном окне со списком, портативный режим и установщик
+  без прав администратора.
+
 Текущая версия — **1.1.3** (versionCode 17).
 
 ## Возможности
@@ -135,7 +141,6 @@ Workflow `.github/workflows/android.yml` запускается по тегу `a
 ## Ссылки
 
 - [Репозиторий панели](https://github.com/RoBiN19666/midipult)
-- [MidiPult для Windows](https://github.com/RoBiN19666/midipult-windows) — версия для компьютера
 - [Все релизы APK](https://github.com/RoBiN19666/midipult-android/releases)
 - [Issues](https://github.com/RoBiN19666/midipult-android/issues) — баги и предложения
 
